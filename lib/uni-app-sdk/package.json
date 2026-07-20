@@ -1,0 +1,60 @@
+{
+  "_args": [
+    [
+      "@worker-platform/uni-app-sdk@file:vendor\\worker-platform-uni-app-sdk-0.1.2.tgz",
+      "D:\\project\\uni-owner-project"
+    ]
+  ],
+  "_from": "@worker-platform/uni-app-sdk@file:vendor/worker-platform-uni-app-sdk-0.1.2.tgz",
+  "_id": "@worker-platform/uni-app-sdk@file:vendor/worker-platform-uni-app-sdk-0.1.2.tgz",
+  "_inBundle": false,
+  "_integrity": "sha512-U21NYP9yXKDIVW3GBRSrgjesgInL4WPb29OwWRsYlN3CmaGZaDjN+0o0+cJev/Og+21uilS1ln5JS/vv16YhrA==",
+  "_location": "/@worker-platform/uni-app-sdk",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "file",
+    "where": "D:\\project\\uni-owner-project",
+    "raw": "@worker-platform/uni-app-sdk@file:vendor/worker-platform-uni-app-sdk-0.1.2.tgz",
+    "name": "@worker-platform/uni-app-sdk",
+    "escapedName": "@worker-platform%2funi-app-sdk",
+    "scope": "@worker-platform",
+    "rawSpec": "file:vendor/worker-platform-uni-app-sdk-0.1.2.tgz",
+    "saveSpec": "file:vendor\\worker-platform-uni-app-sdk-0.1.2.tgz",
+    "fetchSpec": "D:\\project\\uni-owner-project\\vendor\\worker-platform-uni-app-sdk-0.1.2.tgz"
+  },
+  "_requiredBy": [
+    "/"
+  ],
+  "_resolved": false,
+  "_spec": "file:vendor/worker-platform-uni-app-sdk-0.1.2.tgz",
+  "_where": "D:\\project\\uni-owner-project",
+  "description": "Lightweight uni-app SDK for the WorkerHub relay WebSocket API.",
+  "devDependencies": {
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "dist-cjs",
+    "README.md"
+  ],
+  "main": "./dist-cjs/index.js",
+  "module": "./dist/index.js",
+  "name": "@worker-platform/uni-app-sdk",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.cjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "version": "0.1.2"
+}
