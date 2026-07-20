@@ -1,17 +1,22 @@
 import {
   AudioFilled,
   LeftOutlined,
-  PictureOutlined,
+  PlusOutlined,
   RightOutlined,
   SendOutlined,
   SmileOutlined,
 } from '@ant-design/icons';
-import { useEffect, useRef, useState } from 'react';
+import { Bubble, Sender, type BubbleListProps } from '@ant-design/x';
+import { XMarkdown } from '@ant-design/x-markdown';
+import '@ant-design/x-markdown/dist/x-markdown.css';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useWorkerHub } from './hooks/useWorkerHub';
 
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  historical?: boolean;
 };
 
 type ProductCategory = {
@@ -58,6 +63,44 @@ const recommendationMap: Record<string, string[]> = {
   ],
 };
 
+const bubbleRoles: BubbleListProps['role'] = {
+  user: {
+    placement: 'end',
+    variant: 'borderless',
+    classNames: { content: 'message-bubble user' },
+    styles: { },
+  },
+  ai: {
+    placement: 'start',
+    variant: 'borderless',
+    styles: {
+      root: { paddingInlineEnd: 0 },
+    },
+    avatar: <div className="bubble-agent-avatar" aria-hidden="true"><span /></div>,
+    classNames: {
+      body: 'ai-message-body',
+      content: 'message-bubble assistant',
+    },
+    typing: {
+      effect: 'typing',
+      step: 2,
+      interval: 24,
+      keepPrefix: true,
+    },
+    contentRender: (content, info) => (
+      <XMarkdown
+        content={String(content ?? '')}
+        openLinksInNewTab
+        streaming={{
+          hasNextChunk: info.status === 'updating',
+          enableAnimation: false,
+          tail: info.status === 'updating',
+        }}
+      />
+    ),
+  },
+};
+
 function buildReply(question: string) {
   if (question.includes('安装') || question.includes('上下水')) {
     return '不同户型的清洁液自动添加功能和使用方法略有区别，您可以告诉我具体产品型号，我来为您提供对应的安装与使用说明～';
@@ -71,15 +114,73 @@ function buildReply(question: string) {
 }
 
 export default function App() {
+  const { initialize: initializeWorkerHub, sendMessage: sendWorkerHubMessage } = useWorkerHub();
   const [inputValue, setInputValue] = useState('');
   const [activeCategory, setActiveCategory] = useState('sweeper');
   const [activeTab, setActiveTab] = useState('产品推荐');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [conversationEnded, setConversationEnded] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [canScrollCategoryLeft, setCanScrollCategoryLeft] = useState(false);
   const [canScrollCategoryRight, setCanScrollCategoryRight] = useState(true);
   const categoryListRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  const bubbleItems = useMemo(() => {
+    const lastAssistantMessage = [...messages]
+      .reverse()
+      .find((message) => message.role === 'assistant');
+
+    const items = messages.map((message) => {
+      const streaming = loading
+        && message.role === 'assistant'
+        && message.id === lastAssistantMessage?.id;
+
+      return {
+        key: message.id,
+        role: message.role === 'assistant' ? 'ai' : 'user',
+        content: message.content,
+        loading: streaming && message.content.length === 0,
+        streaming,
+        status: streaming ? 'updating' as const : 'success' as const,
+        ...(message.historical ? { typing: false } : {}),
+      };
+    });
+
+    if (historyLoading && items.length === 0) {
+      return [{
+        key: 'history-loading',
+        role: 'ai',
+        content: '',
+        loading: true,
+        streaming: false,
+        status: 'loading' as const,
+        typing: false,
+      }];
+    }
+
+    return items;
+  }, [historyLoading, loading, messages]);
+
+  useEffect(() => {
+    let active = true;
+
+    initializeWorkerHub()
+      .then((history) => {
+        if (!active) return;
+        setMessages(history.map((message) => ({ ...message, historical: true })));
+      })
+      .catch((error: unknown) => {
+        if (active) console.error('[App] 历史会话加载失败：', error);
+      })
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initializeWorkerHub]);
 
   const updateCategoryScrollState = () => {
     const categoryList = categoryListRef.current;
@@ -115,37 +216,68 @@ export default function App() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  const submitQuestion = (question: string) => {
-    const content = question.trim();
-    if (!content || loading) return;
+  useEffect(() => {
+    const chatScroll = chatScrollRef.current;
+    if (!chatScroll) return;
 
-    setMessages((items) => [...items, { id: `user-${Date.now()}`, role: 'user', content }]);
+    chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const updateAssistantMessage = (
+    messageId: string,
+    updateContent: (currentContent: string) => string,
+  ) => {
+    setMessages((items) => items.map((message) => (
+      message.id === messageId
+        ? { ...message, content: updateContent(message.content) }
+        : message
+    )));
+  };
+
+  const submitQuestion = async (question: string) => {
+    const content = question.trim();
+    if (!content || loading || historyLoading) return;
+
+    const requestId = crypto.randomUUID();
+    const assistantMessageId = `assistant-${requestId}`;
+    setMessages((items) => [
+      ...items,
+      { id: `user-${requestId}`, role: 'user', content },
+      { id: assistantMessageId, role: 'assistant', content: '' },
+    ]);
     setInputValue('');
     setLoading(true);
 
-    window.setTimeout(() => {
-      setMessages((items) => [
-        ...items,
-        { id: `assistant-${Date.now()}`, role: 'assistant', content: buildReply(content) },
-      ]);
+    try {
+      await sendWorkerHubMessage(content, {
+        onDelta: (text) => {
+          updateAssistantMessage(assistantMessageId, (currentContent) => currentContent + text);
+        },
+        onFinal: (text) => {
+          updateAssistantMessage(
+            assistantMessageId,
+            (currentContent) => text || currentContent || '已收到回复。',
+          );
+        },
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      updateAssistantMessage(
+        assistantMessageId,
+        () => `抱歉，消息发送失败：${errorMessage}`,
+      );
+    } finally {
       setLoading(false);
-    }, 450);
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      submitQuestion(inputValue);
     }
   };
 
   return (
     <main className="chat-page">
-      <section className="chat-shell" aria-label="追觅科技在线客服">
+      <section className="chat-shell" aria-label="物业助手在线客服">
         <header className="chat-header">
           <div className="brand-lockup">
             <span className="brand-mark" aria-hidden="true"><span /></span>
-            <span>追觅科技</span>
+            <span>物业助手</span>
           </div>
           <div className="header-actions">
             <button type="button" aria-label="开启或关闭声音"><AudioFilled /></button>
@@ -153,154 +285,59 @@ export default function App() {
           </div>
         </header>
 
-        <div className="chat-scroll">
-          {/* <div className="history-card">
-            不同型号的清洁液自动添加功能和使用方法略有区别，<br />
-            您对照对应视频操作就可以啦～
-            <div className="feedback-row">
-              <button type="button">👍&nbsp; 有用</button>
-              <span />
-              <button type="button">👎&nbsp; 没用</button>
-            </div>
-          </div> */}
-
+        <div className="chat-scroll" ref={chatScrollRef}>
           <div className="customer-message">您好，请问您有要咨询的问题吗</div>
-
+          
           <div className="agent-row">
             <div className="agent-avatar" aria-hidden="true"><span /></div>
             <div className="agent-content">
-              <div className="agent-name">小觅</div>
               <div className="welcome-bubble">
-                <strong>▷ 梦想人生，值得追觅！</strong>
+                <strong>▷ 我是你的物业管家！</strong>
                 <span>欢迎咨询小觅，小觅竭诚为您服务，请问有什么可以帮您</span>
                 <span className="sparkles">✨ ✨ ✨</span>
               </div>
             </div>
           </div>
 
-          <div className="agent-row category-row">
-            <div className="agent-avatar" aria-hidden="true"><span /></div>
-            <div className="agent-content category-content">
-              <div className="agent-name">小觅</div>
-              <div className="category-wrap">
-                <button
-                  className="carousel-arrow previous"
-                  type="button"
-                  aria-label="向前浏览"
-                  disabled={!canScrollCategoryLeft}
-                  onClick={() => scrollCategories('left')}
-                >
-                  <LeftOutlined />
-                </button>
-                <div
-                  className="category-list"
-                  ref={categoryListRef}
-                  onScroll={updateCategoryScrollState}
-                >
-                  {productCategories.map((category) => (
-                    <button
-                      className={`category-card ${activeCategory === category.key ? 'active' : ''}`}
-                      key={category.key}
-                      type="button"
-                      onClick={() => setActiveCategory(category.key)}
-                    >
-                      <span className={`product-icon product-${category.key}`}>{category.icon}</span>
-                      <span>{category.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <button
-                  className="carousel-arrow next"
-                  type="button"
-                  aria-label="向后浏览"
-                  disabled={!canScrollCategoryRight}
-                  onClick={() => scrollCategories('right')}
-                >
-                  <RightOutlined />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <section className="guess-panel">
-            <h2><span>🔥</span> 猜你想问：</h2>
-            <div className="question-tabs">
-              <LeftOutlined className="tab-arrow" />
-              {questionTabs.map((tab) => (
-                <button
-                  className={activeTab === tab ? 'active' : ''}
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tab}
-                </button>
-              ))}
-              <RightOutlined className="tab-arrow last" />
-            </div>
-            <ol className="recommendation-list">
-              {recommendationMap[activeTab].map((question, index) => (
-                <li key={question}>
-                  <button type="button" onClick={() => submitQuestion(question.replace(/^\S+\s/, ''))}>
-                    <span className="rank">{index + 1}</span>
-                    <span className="recommendation-text">{question}</span>
-                    <RightOutlined />
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </section>
-
-          <section className="message-list" aria-live="polite">
-            {messages.map((message) => (
-              <div className={`message-bubble ${message.role}`} key={message.id}>
-                {message.content}
-              </div>
-            ))}
-            {loading && <div className="message-bubble assistant">小觅正在整理答案…</div>}
-          </section>
+          <Bubble.List
+            className="message-list"
+            items={bubbleItems}
+            role={bubbleRoles}
+            autoScroll={false}
+            aria-live="polite"
+          />
         </div>
 
         <footer className="chat-footer">
-          {conversationEnded ? (
-            <div className="ended-footer">
-              <div className="ended-card">
-                <span>对话已结束，您可以</span>
-                <button type="button" onClick={() => setConversationEnded(false)}>继续咨询</button>
-              </div>
-              <div className="support-copy">DeepDataWorker提供技术支持</div>
-            </div>
-          ) : (
-            <>
-              <div className="bottom-actions">
-                <button type="button" onClick={() => setConversationEnded(true)}>结束会话</button>
-                <button type="button" onClick={() => submitQuestion('转人工客服')}>转人工</button>
-              </div>
-              <div className="composer">
-                <div className="composer-tools">
-                  <button type="button" aria-label="选择表情"><SmileOutlined /></button>
-                  <button type="button" aria-label="上传图片"><PictureOutlined /></button>
-                </div>
-                <textarea
-                  value={inputValue}
-                  placeholder="请输入您想要咨询的问题"
-                  rows={3}
-                  onChange={(event) => setInputValue(event.target.value)}
-                  onKeyDown={handleKeyDown}
-                />
-                <button
-                  className="send-button"
-                  type="button"
-                  disabled={!inputValue.trim() || loading}
-                  onClick={() => submitQuestion(inputValue)}
-                >
-                  <SendOutlined className="mobile-send-icon" />
-                  <span>发送</span>
+          <Sender
+            className="chat-sender"
+            value={inputValue}
+            loading={loading}
+            disabled={historyLoading}
+            placeholder="请输入您想要咨询的问题"
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            onChange={setInputValue}
+            onSubmit={submitQuestion}
+            suffix={(_, { components: { SendButton } }) => (
+              <div className="sender-actions">
+                <button type="button" disabled={historyLoading} aria-label="选择表情">
+                  <SmileOutlined />
                 </button>
-                <div className="support-copy">DeepDataWorker提供技术支持</div>
+                <button type="button" disabled={historyLoading} aria-label="上传图片">
+                  <PlusOutlined />
+                </button>
+                <span className="sender-divider" aria-hidden="true" />
+                <SendButton
+                  className="sender-submit"
+                  type="text"
+                  icon={<SendOutlined />}
+                  aria-label="发送"
+                />
               </div>
-            </>
-          )}
+            )}
+            footer={false}
+          />
+          <div className="sender-support-copy">DeepDataWorker提供技术支持</div>
         </footer>
       </section>
     </main>
