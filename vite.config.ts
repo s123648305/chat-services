@@ -41,10 +41,11 @@ export default defineConfig(({ mode }) => {
     },
   };
 
-  return {
+    return {
     plugins: [react()],
     define: {
       __WORKER_HUB_WORKER_ID__: JSON.stringify(workerId),
+      __WORKER_HUB_API_KEY__: JSON.stringify(apiKey),
     },
     resolve: {
       alias: {

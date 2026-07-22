@@ -1,18 +1,27 @@
 import {
-  WorkerHubClient,
-  type ChatMessage as WorkerHubChatMessage,
-  type HttpRequestInput,
-  type HttpRequestTransport,
-  type HttpRequestTransportFactoryInput,
-  type SocketCloseEvent,
-  type SocketTransport,
-  type SocketTransportFactoryInput,
-} from '@workerHub';
+  convertHistoryResponse,
+  CustomerRelayClient,
+} from '@szdeepdata/customer-relay-sdk';
 import { useCallback, useEffect, useRef } from 'react';
 
 type StreamHandlers = {
   onDelta: (text: string) => void;
   onFinal: (text: string) => void;
+};
+
+export type ChatAttachment = {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+};
+
+export type SendMessageOptions = {
+  attachments?: ChatAttachment[];
+  userInfo?: Record<string, unknown>;
+  token?: string;
+  role?: string;
+  [key: string]: unknown;
 };
 
 export type WorkerHubHistoryMessage = {
@@ -21,107 +30,13 @@ export type WorkerHubHistoryMessage = {
   content: string;
 };
 
+export type WorkerHubAgent = Record<string, unknown> & {
+  agentId: string;
+  name?: string;
+  isDefault?: boolean;
+};
+
 const sessionStorageKey = 'worker-hub-session-key';
-
-class BrowserSocketTransport implements SocketTransport {
-  private socket?: WebSocket;
-  private openHandler?: () => void;
-  private messageHandler?: (message: string) => void;
-  private closeHandler?: (event: SocketCloseEvent) => void;
-  private errorHandler?: (error: unknown) => void;
-
-  constructor(private readonly input: SocketTransportFactoryInput) {}
-
-  connect() {
-    return new Promise<void>((resolve, reject) => {
-      const socket = new WebSocket(this.input.url);
-      this.socket = socket;
-
-      socket.addEventListener('open', () => {
-        console.info('[WorkerHub][WebSocket] 连接成功。');
-        this.openHandler?.();
-        resolve();
-      });
-      socket.addEventListener('message', async (event) => {
-        const message = typeof event.data === 'string' ? event.data : await event.data.text();
-        console.info('[WorkerHub][WebSocket] 接收帧：', message);
-        this.messageHandler?.(message);
-      });
-      socket.addEventListener('close', (event) => {
-        console.warn('[WorkerHub][WebSocket] 连接关闭：', {
-          code: event.code,
-          reason: event.reason,
-        });
-        this.closeHandler?.({ code: event.code, reason: event.reason });
-      });
-      socket.addEventListener('error', (event) => {
-        console.error('[WorkerHub][WebSocket] 连接错误：', event);
-        this.errorHandler?.(event);
-        reject(new Error('WorkerHub WebSocket 连接失败。'));
-      });
-    });
-  }
-
-  send(message: string) {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      throw new Error('WorkerHub WebSocket 尚未连接。');
-    }
-    console.info('[WorkerHub][WebSocket] 发送帧：', message);
-    this.socket.send(message);
-  }
-
-  close() {
-    this.socket?.close(1000, 'closed by app');
-  }
-
-  onOpen(handler: () => void) {
-    this.openHandler = handler;
-  }
-
-  onMessage(handler: (message: string) => void) {
-    this.messageHandler = handler;
-  }
-
-  onClose(handler: (event: SocketCloseEvent) => void) {
-    this.closeHandler = handler;
-  }
-
-  onError(handler: (error: unknown) => void) {
-    this.errorHandler = handler;
-  }
-}
-
-class BrowserRequestTransport implements HttpRequestTransport {
-  constructor(private readonly input: HttpRequestTransportFactoryInput) {}
-
-  async request<T>(request: HttpRequestInput): Promise<T> {
-    const url = new URL(`${this.input.baseUrl}${request.path}`, window.location.origin);
-    Object.entries(request.query ?? {}).forEach(([key, value]) => {
-      if (value !== undefined) url.searchParams.set(key, String(value));
-    });
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), request.timeoutMs ?? 30000);
-
-    try {
-      const response = await fetch(url, {
-        method: request.method,
-        headers: request.body === undefined ? undefined : { 'Content-Type': 'application/json' },
-        body: request.body === undefined ? undefined : JSON.stringify(request.body),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const detail = await response.text();
-        throw new Error(`WorkerHub 请求失败（${response.status}）：${detail || response.statusText}`);
-      }
-
-      return (response.status === 204 ? undefined : await response.json()) as T;
-    } finally {
-      window.clearTimeout(timeout);
-    }
-  }
-}
 
 function createRelayUrl() {
   const url = new URL('/workerhub-relay', window.location.href);
@@ -129,116 +44,127 @@ function createRelayUrl() {
   return url.toString();
 }
 
-function getSessionKey() {
-  const existingSessionKey = window.sessionStorage.getItem(sessionStorageKey);
-  if (existingSessionKey) return existingSessionKey;
-
-  const sessionKey = `agent:main:web-${crypto.randomUUID()}`;
-  window.sessionStorage.setItem(sessionStorageKey, sessionKey);
-  return sessionKey;
-}
-
-function readMessageText(message: WorkerHubChatMessage) {
-  return message.content
-    .filter((item) => item.type === 'text' && typeof item.text === 'string')
-    .map((item) => item.text)
-    .join('');
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readHistoryContent(content: unknown) {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
+function buildMessage(message:string,context:Record<string,unknown>){
+  const data = {
+    workerRelay:context,
+    message
+  }
+  let jsrContext = message
+   try {
+    jsrContext = JSON.stringify(data)
+   } catch (error) {
 
-  return content
-    .map((block) => {
-      if (!isRecord(block)) return '';
-      if (
-        (block.type === 'text' || block.type === 'input_text' || block.type === 'output_text')
-        && typeof block.text === 'string'
-      ) {
-        return block.text;
-      }
-      return '';
-    })
-    .join('');
+   }
+   return jsrContext
+}
+
+function extractMessageText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!isRecord(value)) return '';
+  if (typeof value.text === 'string') return value.text;
+  if (typeof value.content === 'string') return value.content;
+  if (typeof value.deltaText === 'string') return value.deltaText;
+  if (typeof value.message === 'string') return value.message;
+  if (isRecord(value.content) && typeof value.content.text === 'string') {
+    return value.content.text;
+  }
+  return '';
+}
+
+function extractUserDisplayText(text: string): string {
+  const value = text.trim();
+  if (!value.startsWith('{')) return text;
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (isRecord(parsed) && typeof parsed.message === 'string') {
+      return parsed.message;
+    }
+  } catch {
+    // Ordinary user text can start with "{" without being JSON.
+  }
+
+  return text;
 }
 
 function readHistoryMessages(response: unknown): WorkerHubHistoryMessage[] {
-  if (!isRecord(response)) return [];
-
-  const payload = isRecord(response.data) ? response.data : response;
-  const entries = Array.isArray(payload.messages)
-    ? payload.messages
-    : Array.isArray(payload.entries)
-      ? payload.entries
-      : [];
-
-  return entries.flatMap((entry, index) => {
-    if (!isRecord(entry)) return [];
-    const message = isRecord(entry.message) ? entry.message : entry;
-    const role = message.role;
-    if (role !== 'user' && role !== 'assistant') return [];
-
-    const content = readHistoryContent(message.content);
-    if (!content.trim()) return [];
-
-    const rawId = message.id ?? entry.id ?? message.timestamp ?? entry.timestamp;
-    return [{
-      id: typeof rawId === 'string' || typeof rawId === 'number'
-        ? `history-${String(rawId)}`
-        : `history-${index}`,
-      role,
-      content,
-    }];
-  });
+  const messages = convertHistoryResponse(response);
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.role === 'user'
+        ? extractUserDisplayText(message.text)
+        : message.text,
+    }));
 }
 
-function createWorkerHubClient() {
-  return new WorkerHubClient({
-    relayUrl: createRelayUrl(),
-    apiBaseUrl: '/workerhub-api',
-    apiKey: '',
-    workerId: __WORKER_HUB_WORKER_ID__,
-    transportFactory: (input) => new BrowserSocketTransport(input),
-    requestFactory: (input) => new BrowserRequestTransport(input),
+function readAgents(response: unknown): WorkerHubAgent[] {
+  const list = Array.isArray(response)
+    ? response
+    : isRecord(response)
+      ? [response.agents, response.data, response.items].find(Array.isArray) ?? []
+      : [];
+
+  return list
+    .filter(isRecord)
+    .map((agent) => {
+      const agentId = [agent.agentId, agent.id, agent.key]
+        .find((value): value is string => typeof value === 'string' && value.length > 0);
+      if (!agentId) return null;
+
+      return {
+        ...agent,
+        agentId,
+        ...(typeof agent.name === 'string' ? { name: agent.name } : {}),
+        ...(typeof agent.isDefault === 'boolean' ? { isDefault: agent.isDefault } : {}),
+      };
+    })
+    .filter((agent): agent is WorkerHubAgent => agent !== null);
+}
+
+function createClient() {
+  return new CustomerRelayClient({
+    url: createRelayUrl(),
+    apiKey: __WORKER_HUB_API_KEY__,
+    defaultTimeoutMs: 60_000,
   });
 }
 
 export function useWorkerHub() {
-  const clientRef = useRef<WorkerHubClient | null>(null);
+  const clientRef = useRef<CustomerRelayClient | null>(null);
   const sessionPromiseRef = useRef<Promise<string> | null>(null);
+  const chatSessionKeyPromiseRef = useRef<Promise<string> | null>(null);
+  const relaySessionIdRef = useRef<string | null>(null);
   const closeTimerRef = useRef<number | null>(null);
 
   const getClient = useCallback(() => {
-    if (!clientRef.current) clientRef.current = createWorkerHubClient();
+    if (!clientRef.current) {
+      clientRef.current = createClient();
+    }
     return clientRef.current;
   }, []);
 
   const resetClient = useCallback(() => {
-    clientRef.current?.close();
+    clientRef.current?.disconnect();
     clientRef.current = null;
     sessionPromiseRef.current = null;
+    chatSessionKeyPromiseRef.current = null;
+    relaySessionIdRef.current = null;
   }, []);
 
   const ensureChatSession = useCallback(() => {
     if (!sessionPromiseRef.current) {
       const client = getClient();
       sessionPromiseRef.current = (async () => {
-        await client.connect();
-        const agents = await client.listWorkerAgents();
-        const agentId = agents.defaultAgentId ?? agents.agents[0]?.agentId ?? 'main';
-        const session = await client.ensureSession({
-          agentId,
-          sessionKey: getSessionKey(),
-          // label: '物业助手在线客服',
-          metadata: { source: 'chat-services-web' },
-        });
-        await client.selectSession(session.key);
-        return session.key;
+        const relay = await client.openSession(__WORKER_HUB_WORKER_ID__);
+        relaySessionIdRef.current = relay.relaySessionId;
+        return relay.relaySessionId;
       })().catch((error) => {
         sessionPromiseRef.current = null;
         throw error;
@@ -248,18 +174,66 @@ export function useWorkerHub() {
     return sessionPromiseRef.current;
   }, [getClient]);
 
+  const listAgents = useCallback(async () => {
+    const client = getClient();
+    const relaySessionId = await ensureChatSession();
+    const response = await client.listAgents(relaySessionId);
+    const agents = readAgents(response);
+
+    console.info('[WorkerHub][listAgents] Agent 列表加载完成：', {
+      agentIds: agents.map((agent) => agent.agentId),
+      agents,
+    });
+    return agents;
+  }, [ensureChatSession, getClient]);
+
+  const getSessionKey = useCallback((relaySessionId: string) => {
+    const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
+    if (existingSessionKey) return Promise.resolve(existingSessionKey);
+
+    if (!chatSessionKeyPromiseRef.current) {
+      const client = getClient();
+      chatSessionKeyPromiseRef.current = client
+        .createSession<Record<string, unknown>>(relaySessionId, { agentId: 'default' })
+        .then((result) => {
+          const sessionKey = [
+            result.sessionKey,
+            result.key,
+            result.sessionId,
+            result.id,
+          ].find((value): value is string => typeof value === 'string' && value.length > 0);
+
+          if (!sessionKey) {
+            throw new Error('WorkerHub 创建会话成功，但未返回 sessionKey。');
+          }
+
+          window.localStorage.setItem(sessionStorageKey, sessionKey);
+          console.info('[WorkerHub][createSession] 会话创建完成：', { sessionKey });
+          return sessionKey;
+        })
+        .catch((error) => {
+          chatSessionKeyPromiseRef.current = null;
+          throw error;
+        });
+    }
+
+    return chatSessionKeyPromiseRef.current;
+  }, [getClient]);
+
   const initialize = useCallback(async () => {
     const client = getClient();
     console.info('[WorkerHub][initialize] 正在连接并加载历史会话…');
 
     try {
-      const sessionKey = await ensureChatSession();
-      const response = await client.requestCommand<unknown>('chat.history', { sessionKey });
+      const relaySessionId = await ensureChatSession();
+      await listAgents();
+      const sessionKey = await getSessionKey(relaySessionId);
+      const response = await client.chatHistory(relaySessionId, { sessionKey });
       const history = readHistoryMessages(response);
+
       console.info('[WorkerHub][initialize] 历史会话加载完成：', {
-        sessionKey,
+        relaySessionId,
         messageCount: history.length,
-        response,
       });
       return history;
     } catch (error) {
@@ -267,21 +241,27 @@ export function useWorkerHub() {
       resetClient();
       throw error;
     }
-  }, [ensureChatSession, getClient, resetClient]);
+  }, [ensureChatSession, getClient, getSessionKey, listAgents, resetClient]);
 
-  const sendMessage = useCallback(async (message: string, handlers: StreamHandlers) => {
+  const sendMessage = useCallback(async (
+    message: string,
+    handlers: StreamHandlers,
+    options: SendMessageOptions = {},
+  ) => {
     const client = getClient();
     console.info('[WorkerHub][sendMessage] 开始发送：', { message });
 
     try {
-      console.info('[WorkerHub][sendMessage] 正在初始化会话…');
-      const sessionKey = await ensureChatSession();
-      console.info('[WorkerHub][sendMessage] 会话初始化完成：', { sessionKey });
+      const relaySessionId = await ensureChatSession();
+      const sessionKey = await getSessionKey(relaySessionId);
+      console.info('[WorkerHub][sendMessage] 会话初始化完成：', { relaySessionId });
 
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        let timeout = 0;
+      let settled = false;
+      let timeout = 0;
+      let resolvedRunId: string | undefined;
+      let finishStream: (error?: Error) => void = () => {};
 
+      const waitForStream = new Promise<void>((resolve, reject) => {
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
@@ -289,47 +269,79 @@ export function useWorkerHub() {
           if (error) reject(error);
           else resolve();
         };
+        finishStream = finish;
 
-        timeout = window.setTimeout(
-          () => finish(new Error('回复等待超时，请稍后重试。')),
-          120000,
-        );
+        let unsubscribe = client.on('relay.event:chat', (event) => {
+          if (!isRecord(event) || !isRecord(event.data)) return;
 
-        console.info('[WorkerHub][sendMessage] 正在提交消息…');
-        client.sendMessage({
-          sessionKey,
-          message,
-          onDelta: (text) => {
-            console.info('[WorkerHub][sendMessage] 接收增量：', text);
-            handlers.onDelta(text);
-          },
-          onFinal: (finalMessage) => {
-            const text = readMessageText(finalMessage);
-            console.info('[WorkerHub][sendMessage] 接收最终回复：', {
-              text,
-              rawMessage: finalMessage,
-            });
-            handlers.onFinal(text);
+          const data = event.data;
+          const runId = typeof data.runId === 'string' ? data.runId : undefined;
+          if (resolvedRunId && runId && runId !== resolvedRunId) return;
+
+          const state = typeof data.state === 'string' ? data.state : '';
+
+          if (state === 'delta' && typeof data.deltaText === 'string') {
+            console.info('[WorkerHub][sendMessage] 接收增量：', data.deltaText);
+            handlers.onDelta(data.deltaText);
+            return;
+          }
+
+          if (state === 'final') {
+            const finalText = extractMessageText(data.message);
+            console.info('[WorkerHub][sendMessage] 接收最终回复：', { finalText, raw: data });
+            handlers.onFinal(finalText);
+            unsubscribe();
             finish();
-          },
-          onError: (error) => {
-            console.error('[WorkerHub][sendMessage] 流式响应错误：', error);
-            finish(error);
-          },
-        }).then((result) => {
-          console.info('[WorkerHub][sendMessage] SDK 已受理消息：', result);
-        }).catch((error: unknown) => {
-          console.error('[WorkerHub][sendMessage] SDK 提交失败：', error);
-          finish(error instanceof Error ? error : new Error(String(error)));
+            return;
+          }
+
+          if (state === 'error' || data.error === true) {
+            const errorText = extractMessageText(isRecord(data.error) ? data.error.message : data.error);
+            console.error('[WorkerHub][sendMessage] 流式响应错误：', errorText || data);
+            unsubscribe();
+            finish(new Error(errorText || '生成失败'));
+          }
         });
+
+        timeout = window.setTimeout(() => {
+          unsubscribe();
+          finish(new Error('处理超时，请稍后重试。'));
+        }, 120_000);
       });
+
+
+      const requestPayload = {
+        sessionKey,
+        message: buildMessage(message,options),
+      };
+      console.info('[WorkerHub][sendMessage] 请求参数：', requestPayload);
+
+      const result = await client.sendChat(
+        relaySessionId,
+        requestPayload,
+        { timeoutMs: 60_000 },
+      );
+      const runId = isRecord(result) ? result.runId : undefined;
+      if (typeof runId === 'string') {
+        resolvedRunId = runId;
+        console.info('[WorkerHub][sendMessage] SDK 已受理消息：', { runId });
+      } else {
+        const finalText = extractMessageText(result);
+        console.info('[WorkerHub][sendMessage] SDK 已受理消息：', result);
+        if (finalText) {
+          handlers.onFinal(finalText);
+          finishStream();
+        }
+      }
+
+      await waitForStream;
       console.info('[WorkerHub][sendMessage] 本次消息处理完成。');
     } catch (error) {
       console.error('[WorkerHub][sendMessage] 通信失败：', error);
       resetClient();
       throw error;
     }
-  }, [ensureChatSession, getClient, resetClient]);
+  }, [ensureChatSession, getClient, getSessionKey, resetClient]);
 
   useEffect(() => {
     if (closeTimerRef.current !== null) {
@@ -345,5 +357,5 @@ export function useWorkerHub() {
     };
   }, [resetClient]);
 
-  return { initialize, sendMessage };
+  return { initialize, listAgents, sendMessage };
 }

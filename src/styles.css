@@ -91,6 +91,61 @@ button {
   gap: 19px;
 }
 
+.role-switch-trigger {
+  color: #fff !important;
+  border: 0;
+  padding: 0;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+}
+
+.role-switch-drawer .ant-drawer-header {
+  padding-bottom: 8px;
+}
+
+.role-switch-drawer .ant-drawer-body {
+  padding-top: 6px;
+}
+
+.role-switch-intro {
+  margin-bottom: 14px;
+  color: #666;
+  font-size: 14px;
+}
+
+.role-switch-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.role-switch-option {
+  width: 100%;
+  height: auto;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  justify-items: start;
+  text-align: left;
+  white-space: normal;
+}
+
+.role-switch-option .option-title {
+  font-size: 16px;
+}
+
+.role-switch-option .option-subtitle {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.role-switch-option.active {
+  --ant-primary-1: #f5e9d7;
+}
+
 .header-actions button {
   padding: 0;
   color: #fff;
@@ -454,18 +509,33 @@ button {
   border-radius: 0 0 50% 50%;
 }
 
-.message-bubble.assistant .ant-x-markdown {
+.message-bubble.assistant .x-markdown {
   color: inherit;
   font-size: inherit;
   line-height: inherit;
 }
 
-.message-bubble.assistant .ant-x-markdown > :first-child {
+.message-bubble.assistant .x-markdown > :first-child {
   margin-top: 0;
 }
 
-.message-bubble.assistant .ant-x-markdown > :last-child {
+.message-bubble.assistant .x-markdown > :last-child {
   margin-bottom: 0;
+}
+
+/* Keep markdown tables readable on narrow chat bubbles and scroll them horizontally. */
+.message-bubble.assistant .x-markdown table:not(pre) {
+  width: max-content;
+  min-width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.message-bubble.assistant .x-markdown table:not(pre) th,
+.message-bubble.assistant .x-markdown table:not(pre) td {
+  white-space: nowrap;
 }
 
 .floating-advisor {
@@ -490,6 +560,107 @@ button {
   flex: 0 0 auto;
   padding: 12px 24px 4px;
   background: #eef1f4;
+}
+
+.sender-file-input {
+  display: none;
+}
+
+.quick-prompts .ant-prompts-item:not(.ant-prompts-item-has-nest):hover {
+  background: #fff !important;
+}
+
+.quick-prompts .ant-prompts-item:not(.ant-prompts-item-has-nest):active {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+.quick-prompts {
+  padding: 0 0 6px;
+}
+
+.quick-prompts .ant-prompts-title {
+  margin: 0 0 8px !important;
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.quick-prompts .ant-prompts-list {
+  gap: 8px !important;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.quick-prompts .ant-prompts-list::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-prompts .ant-prompts-item {
+  min-height: 42px;
+  gap: 6px !important;
+  padding: 8px 12px !important;
+  align-items: center !important;
+  border-radius: 14px !important;
+}
+
+.quick-prompts .ant-prompts-icon,
+.quick-prompts .ant-prompts-label {
+  font-size: 14px !important;
+  line-height: 20px !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 480px) {
+  .quick-prompts .ant-prompts-title {
+    margin-bottom: 6px !important;
+    font-size: 14px !important;
+  }
+
+  .quick-prompts .ant-prompts-list {
+    gap: 6px !important;
+  }
+
+  .quick-prompts .ant-prompts-item {
+    min-height: 38px;
+    padding: 7px 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .quick-prompts .ant-prompts-icon,
+  .quick-prompts .ant-prompts-label {
+    font-size: 13px !important;
+  }
+}
+
+.sender-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  max-width: 100%;
+  margin: 0 4px 8px;
+  padding: 7px 10px;
+  border: 1px solid #d9dee5;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.sender-attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sender-attachment button {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #8b95a1;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .chat-sender {

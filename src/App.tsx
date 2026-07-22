@@ -1,66 +1,24 @@
 import {
   AudioFilled,
-  LeftOutlined,
   PlusOutlined,
-  RightOutlined,
   SendOutlined,
   SmileOutlined,
 } from '@ant-design/icons';
-import { Bubble, Sender, type BubbleListProps } from '@ant-design/x';
+import { Bubble, Sender, type BubbleListProps, type PromptsItemType } from '@ant-design/x';
 import { XMarkdown } from '@ant-design/x-markdown';
 import '@ant-design/x-markdown/dist/x-markdown.css';
+import '@ant-design/x-markdown/themes/light.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useWorkerHub } from './hooks/useWorkerHub';
+import { useWorkerHub, type ChatAttachment } from './hooks/useWorkerHub';
+import SwitchRole from './components/switchRole';
+import PromptList from './components/promptsList';
+import dayjs from 'dayjs'
 
 type ChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   historical?: boolean;
-};
-
-type ProductCategory = {
-  key: string;
-  label: string;
-  icon: string;
-};
-
-const productCategories: ProductCategory[] = [
-  { key: 'sweeper', label: '扫地机', icon: '▥' },
-  { key: 'scrubber', label: '洗地机', icon: '♧' },
-  { key: 'vacuum', label: '吸尘器', icon: '⚯' },
-  { key: 'purifier', label: '净水器', icon: '▣' },
-  { key: 'kitchen', label: '大厨电', icon: '▥' },
-  { key: 'small', label: '小家电', icon: '◫' },
-];
-
-const questionTabs = ['产品推荐', '会员福利', '上下水安装', '热门问题'];
-
-const recommendationMap: Record<string, string[]> = {
-  产品推荐: [
-    '🔥 S60Pro超压旋风变速活水洗',
-    '✨ X60Pro超压活水 净循无界',
-    '🔥 S50Pro100℃热水洗智能旗舰',
-    '✨ X50Pro增强版AI智能加压清扫',
-  ],
-  会员福利: [
-    '🎁 新会员专享注册礼遇',
-    '✨ 积分兑换与签到福利',
-    '🔥 会员日限时加倍积分',
-    '🎁 老用户焕新专属权益',
-  ],
-  上下水安装: [
-    '🔧 上下水安装条件说明',
-    '✨ 安装前需要预留多大空间',
-    '💧 进水口与排水口位置要求',
-    '📅 如何预约上门勘测安装',
-  ],
-  热门问题: [
-    '🔥 扫地机如何选择适合的型号',
-    '✨ 如何连接手机与家庭网络',
-    '💧 清水箱和污水箱如何保养',
-    '🛠️ 售后服务和保修政策',
-  ],
 };
 
 const bubbleRoles: BubbleListProps['role'] = {
@@ -90,6 +48,7 @@ const bubbleRoles: BubbleListProps['role'] = {
     contentRender: (content, info) => (
       <XMarkdown
         content={String(content ?? '')}
+        rootClassName="x-markdown-light"
         openLinksInNewTab
         streaming={{
           hasNextChunk: info.status === 'updating',
@@ -101,30 +60,22 @@ const bubbleRoles: BubbleListProps['role'] = {
   },
 };
 
-function buildReply(question: string) {
-  if (question.includes('安装') || question.includes('上下水')) {
-    return '不同户型的清洁液自动添加功能和使用方法略有区别，您可以告诉我具体产品型号，我来为您提供对应的安装与使用说明～';
-  }
-
-  if (question.includes('会员') || question.includes('福利')) {
-    return '追觅会员可享受积分兑换、会员日礼遇和新品福利。您可以告诉我想了解的具体权益，我会为您详细介绍～';
-  }
-
-  return `收到您的问题：“${question}”。请告诉我产品型号或具体使用场景，小觅会继续为您解答～`;
-}
-
 export default function App() {
   const { initialize: initializeWorkerHub, sendMessage: sendWorkerHubMessage } = useWorkerHub();
   const [inputValue, setInputValue] = useState('');
-  const [activeCategory, setActiveCategory] = useState('sweeper');
-  const [activeTab, setActiveTab] = useState('产品推荐');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [canScrollCategoryLeft, setCanScrollCategoryLeft] = useState(false);
-  const [canScrollCategoryRight, setCanScrollCategoryRight] = useState(true);
-  const categoryListRef = useRef<HTMLDivElement>(null);
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const userInfo = {
+    source:'h5',
+    token: 'token',
+    role: 'user',
+  };
+
 
   const bubbleItems = useMemo(() => {
     const lastAssistantMessage = [...messages]
@@ -182,40 +133,6 @@ export default function App() {
     };
   }, [initializeWorkerHub]);
 
-  const updateCategoryScrollState = () => {
-    const categoryList = categoryListRef.current;
-    if (!categoryList) return;
-
-    const maxScrollLeft = categoryList.scrollWidth - categoryList.clientWidth;
-    setCanScrollCategoryLeft(categoryList.scrollLeft > 2);
-    setCanScrollCategoryRight(categoryList.scrollLeft < maxScrollLeft - 2);
-  };
-
-  const scrollCategories = (direction: 'left' | 'right') => {
-    const categoryList = categoryListRef.current;
-    if (!categoryList) return;
-
-    const firstCard = categoryList.querySelector<HTMLElement>('.category-card');
-    const cardWidth = firstCard?.offsetWidth ?? 129;
-    const gap = Number.parseFloat(window.getComputedStyle(categoryList).columnGap) || 12;
-
-    categoryList.scrollBy({
-      left: direction === 'left' ? -(cardWidth + gap) * 2 : (cardWidth + gap) * 2,
-      behavior: 'smooth',
-    });
-  };
-
-  useEffect(() => {
-    const categoryList = categoryListRef.current;
-    if (!categoryList) return;
-
-    updateCategoryScrollState();
-    const resizeObserver = new ResizeObserver(updateCategoryScrollState);
-    resizeObserver.observe(categoryList);
-
-    return () => resizeObserver.disconnect();
-  }, []);
-
   useEffect(() => {
     const chatScroll = chatScrollRef.current;
     if (!chatScroll) return;
@@ -236,20 +153,24 @@ export default function App() {
 
   const submitQuestion = async (question: string) => {
     const content = question.trim();
-    if (!content || loading || historyLoading) return;
+    if ((!content && !attachment) || loading || historyLoading) return;
+
+    const selectedAttachment = attachment;
+    const displayContent = content || `附件：${selectedAttachment?.name ?? ''}`;
 
     const requestId = crypto.randomUUID();
     const assistantMessageId = `assistant-${requestId}`;
     setMessages((items) => [
       ...items,
-      { id: `user-${requestId}`, role: 'user', content },
+      { id: `user-${requestId}`, role: 'user', content: displayContent },
       { id: assistantMessageId, role: 'assistant', content: '' },
     ]);
     setInputValue('');
+    setAttachment(null);
     setLoading(true);
 
     try {
-      await sendWorkerHubMessage(content, {
+      await sendWorkerHubMessage(content || '请查看附件并回复。', {
         onDelta: (text) => {
           updateAssistantMessage(assistantMessageId, (currentContent) => currentContent + text);
         },
@@ -259,6 +180,9 @@ export default function App() {
             (currentContent) => text || currentContent || '已收到回复。',
           );
         },
+      }, {
+        userInfo,
+        ...(selectedAttachment ? { attachments: [selectedAttachment] } : {}),
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '未知错误';
@@ -271,6 +195,12 @@ export default function App() {
     }
   };
 
+  const promptClick = (data: PromptsItemType) => {
+    submitQuestion(String(data.label ?? ''));
+  };
+
+  const timeSpan = useMemo(()=><span>{dayjs().format('YYYY-MM-DD HH:MM')}</span>,[])
+
   return (
     <main className="chat-page">
       <section className="chat-shell" aria-label="物业助手在线客服">
@@ -280,20 +210,21 @@ export default function App() {
             <span>物业助手</span>
           </div>
           <div className="header-actions">
+            <SwitchRole />
             <button type="button" aria-label="开启或关闭声音"><AudioFilled /></button>
             <button type="button" aria-label="最小化窗口">—</button>
           </div>
         </header>
 
         <div className="chat-scroll" ref={chatScrollRef}>
-          <div className="customer-message">您好，请问您有要咨询的问题吗</div>
+          <div className="customer-message">{timeSpan}</div>
           
           <div className="agent-row">
             <div className="agent-avatar" aria-hidden="true"><span /></div>
             <div className="agent-content">
               <div className="welcome-bubble">
                 <strong>▷ 我是你的物业管家！</strong>
-                <span>欢迎咨询小觅，小觅竭诚为您服务，请问有什么可以帮您</span>
+                <span>欢迎咨询，竭诚为您服务，请问有什么可以帮您</span>
                 <span className="sparkles">✨ ✨ ✨</span>
               </div>
             </div>
@@ -308,8 +239,41 @@ export default function App() {
           />
         </div>
 
-        <footer className="chat-footer">
-          <Sender
+      <footer className="chat-footer">
+        <PromptList onItemClick={promptClick}/>
+        {attachment && (
+          <div className="sender-attachment" role="status">
+            <span className="sender-attachment-name" title={attachment.name}>📎 {attachment.name}</span>
+            <button type="button" onClick={() => setAttachment(null)} aria-label="移除附件">×</button>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          className="sender-file-input"
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            if (file.size > 10 * 1024 * 1024) {
+              window.alert('附件不能超过 10MB');
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result !== 'string') return;
+              setAttachment({
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                size: file.size,
+                dataUrl: reader.result,
+              });
+            };
+            reader.readAsDataURL(file);
+          }}
+        />
+        <Sender
             className="chat-sender"
             value={inputValue}
             loading={loading}
@@ -323,7 +287,12 @@ export default function App() {
                 <button type="button" disabled={historyLoading} aria-label="选择表情">
                   <SmileOutlined />
                 </button>
-                <button type="button" disabled={historyLoading} aria-label="上传图片">
+                <button
+                  type="button"
+                  disabled={historyLoading || loading}
+                  aria-label="上传附件"
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   <PlusOutlined />
                 </button>
                 <span className="sender-divider" aria-hidden="true" />
