@@ -1,125 +1,59 @@
-import {
-  AudioFilled,
-  PlusOutlined,
-  SendOutlined,
-  SmileOutlined,
-} from '@ant-design/icons';
-import { Bubble, Sender, type BubbleListProps, type PromptsItemType } from '@ant-design/x';
-import { XMarkdown } from '@ant-design/x-markdown';
-import '@ant-design/x-markdown/dist/x-markdown.css';
-import '@ant-design/x-markdown/themes/light.css';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useWorkerHub, type ChatAttachment } from './hooks/useWorkerHub';
-import SwitchRole from './components/switchRole';
-import PromptList from './components/promptsList';
-import dayjs from 'dayjs'
+import ChatComposer from './components/ChatComposer';
+import ChatConversation from './components/ChatConversation';
+import ChatHeader from './components/ChatHeader';
+import type { ChatSettingsValue } from './components/ChatSettings';
+import type { ChatMessage } from './components/chatTypes';
+import {
+  useWorkerHub,
+  type ChatAttachment,
+  type WorkerHubAgent,
+  type WorkerHubWorker,
+} from './hooks/useWorkerHub';
 
-type ChatMessage = {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  historical?: boolean;
+const baseUserInfo = {
+  source: 'h5',
+  token: 'token',
+  phone: '15626881010',
+  userName: '李四',
 };
 
-const bubbleRoles: BubbleListProps['role'] = {
-  user: {
-    placement: 'end',
-    variant: 'borderless',
-    classNames: { content: 'message-bubble user' },
-    styles: { },
-  },
-  ai: {
-    placement: 'start',
-    variant: 'borderless',
-    styles: {
-      root: { paddingInlineEnd: 0 },
-    },
-    avatar: <div className="bubble-agent-avatar" aria-hidden="true"><span /></div>,
-    classNames: {
-      body: 'ai-message-body',
-      content: 'message-bubble assistant',
-    },
-    typing: {
-      effect: 'typing',
-      step: 2,
-      interval: 24,
-      keepPrefix: true,
-    },
-    contentRender: (content, info) => (
-      <XMarkdown
-        content={String(content ?? '')}
-        rootClassName="x-markdown-light"
-        openLinksInNewTab
-        streaming={{
-          hasNextChunk: info.status === 'updating',
-          enableAnimation: false,
-          tail: info.status === 'updating',
-        }}
-      />
-    ),
-  },
+const initialSettings: ChatSettingsValue = {
+  role: 'user',
+  workerId: __WORKER_HUB_WORKER_ID__,
+  agentId: 'default',
 };
 
 export default function App() {
-  const { initialize: initializeWorkerHub, sendMessage: sendWorkerHubMessage } = useWorkerHub();
-  const [inputValue, setInputValue] = useState('');
+  const {
+    cancelMessage: cancelWorkerHubMessage,
+    initialize: initializeWorkerHub,
+    listAgents: listWorkerHubAgents,
+    listWorkers: listWorkerHubWorkers,
+    sendMessage: sendWorkerHubMessage,
+    setSessionContext,
+  } = useWorkerHub();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [agents, setAgents] = useState<WorkerHubAgent[]>([]);
+  const [workers, setWorkers] = useState<WorkerHubWorker[]>([]);
+  const [settings, setSettings] = useState(initialSettings);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const userInfo = {
-    source:'h5',
-    token: 'token',
-    role: 'user',
-  };
-
-
-  const bubbleItems = useMemo(() => {
-    const lastAssistantMessage = [...messages]
-      .reverse()
-      .find((message) => message.role === 'assistant');
-
-    const items = messages.map((message) => {
-      const streaming = loading
-        && message.role === 'assistant'
-        && message.id === lastAssistantMessage?.id;
-
-      return {
-        key: message.id,
-        role: message.role === 'assistant' ? 'ai' : 'user',
-        content: message.content,
-        loading: streaming && message.content.length === 0,
-        streaming,
-        status: streaming ? 'updating' as const : 'success' as const,
-        ...(message.historical ? { typing: false } : {}),
-      };
-    });
-
-    if (historyLoading && items.length === 0) {
-      return [{
-        key: 'history-loading',
-        role: 'ai',
-        content: '',
-        loading: true,
-        streaming: false,
-        status: 'loading' as const,
-        typing: false,
-      }];
-    }
-
-    return items;
-  }, [historyLoading, loading, messages]);
 
   useEffect(() => {
     let active = true;
 
-    initializeWorkerHub()
-      .then((history) => {
+    Promise.all([
+      initializeWorkerHub(),
+      listWorkerHubAgents(),
+      listWorkerHubWorkers(),
+    ])
+      .then(([history, nextAgents, nextWorkers]) => {
         if (!active) return;
         setMessages(history.map((message) => ({ ...message, historical: true })));
+        setAgents(nextAgents);
+        setWorkers(nextWorkers);
       })
       .catch((error: unknown) => {
         if (active) console.error('[App] 历史会话加载失败：', error);
@@ -131,7 +65,33 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [initializeWorkerHub]);
+  }, [initializeWorkerHub, listWorkerHubAgents, listWorkerHubWorkers]);
+
+  const workerOptions = useMemo(() => {
+    const options = workers.map((worker) => ({
+      label: worker.displayName && worker.displayName !== worker.workerId
+        ? `${worker.displayName} · ${worker.workerId}`
+        : worker.workerId,
+      value: worker.workerId,
+    }));
+    if (!options.some((option) => option.value === settings.workerId)) {
+      options.unshift({ label: settings.workerId, value: settings.workerId });
+    }
+    return options;
+  }, [settings.workerId, workers]);
+
+  const agentOptions = useMemo(() => {
+    const options = agents.map((agent) => ({
+      label: agent.name && agent.name !== agent.agentId
+        ? `${agent.name} · ${agent.agentId}`
+        : agent.agentId,
+      value: agent.agentId,
+    }));
+    if (!options.some((option) => option.value === 'default')) {
+      options.unshift({ label: 'default', value: 'default' });
+    }
+    return options;
+  }, [agents]);
 
   useEffect(() => {
     const chatScroll = chatScrollRef.current;
@@ -143,34 +103,28 @@ export default function App() {
   const updateAssistantMessage = (
     messageId: string,
     updateContent: (currentContent: string) => string,
+    status?: ChatMessage['status'],
   ) => {
     setMessages((items) => items.map((message) => (
       message.id === messageId
-        ? { ...message, content: updateContent(message.content) }
+        ? {
+            ...message,
+            content: updateContent(message.content),
+            ...(status ? { status } : {}),
+          }
         : message
     )));
   };
 
-  const submitQuestion = async (question: string) => {
-    const content = question.trim();
-    if ((!content && !attachment) || loading || historyLoading) return;
-
-    const selectedAttachment = attachment;
-    const displayContent = content || `附件：${selectedAttachment?.name ?? ''}`;
-
-    const requestId = crypto.randomUUID();
-    const assistantMessageId = `assistant-${requestId}`;
-    setMessages((items) => [
-      ...items,
-      { id: `user-${requestId}`, role: 'user', content: displayContent },
-      { id: assistantMessageId, role: 'assistant', content: '' },
-    ]);
-    setInputValue('');
-    setAttachment(null);
+  const runAssistantRequest = async (
+    assistantMessageId: string,
+    requestMessage: string,
+    selectedAttachment: ChatAttachment | null,
+  ) => {
     setLoading(true);
 
     try {
-      await sendWorkerHubMessage(content || '请查看附件并回复。', {
+      await sendWorkerHubMessage(requestMessage, {
         onDelta: (text) => {
           updateAssistantMessage(assistantMessageId, (currentContent) => currentContent + text);
         },
@@ -178,136 +132,140 @@ export default function App() {
           updateAssistantMessage(
             assistantMessageId,
             (currentContent) => text || currentContent || '已收到回复。',
+            'success',
+          );
+        },
+        onAbort: () => {
+          updateAssistantMessage(
+            assistantMessageId,
+            (currentContent) => currentContent || '已停止生成。',
+            'abort',
           );
         },
       }, {
-        userInfo,
+        userInfo: {
+          ...baseUserInfo,
+          role: settings.role,
+        },
         ...(selectedAttachment ? { attachments: [selectedAttachment] } : {}),
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      console.error('[App] 消息发送失败：', error);
       updateAssistantMessage(
         assistantMessageId,
-        () => `抱歉，消息发送失败：${errorMessage}`,
+        () => '抱歉，消息发送失败，请稍后重试。',
+        'error',
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const promptClick = (data: PromptsItemType) => {
-    submitQuestion(String(data.label ?? ''));
+  const retryMessage = async (message: ChatMessage) => {
+    if (loading || historyLoading || !message.retryPayload) return;
+
+    setMessages((items) => items.map((item) => (
+      item.id === message.id
+        ? { ...item, content: '', status: 'streaming' }
+        : item
+    )));
+
+    await runAssistantRequest(
+      message.id,
+      message.retryPayload.message,
+      message.retryPayload.attachment,
+    );
   };
 
-  const timeSpan = useMemo(()=><span>{dayjs().format('YYYY-MM-DD HH:MM')}</span>,[])
+  const submitQuestion = async (
+    question: string,
+    selectedAttachment: ChatAttachment | null,
+  ) => {
+    const content = question.trim();
+    if ((!content && !selectedAttachment) || loading || historyLoading) return;
+
+    const displayContent = content || `附件：${selectedAttachment?.name ?? ''}`;
+    const requestMessage = content || '请查看附件并回复。';
+    const requestId = crypto.randomUUID();
+    const assistantMessageId = `assistant-${requestId}`;
+
+    setMessages((items) => [
+      ...items,
+      { id: `user-${requestId}`, role: 'user', content: displayContent },
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+        retryPayload: {
+          message: requestMessage,
+          attachment: selectedAttachment,
+        },
+      },
+    ]);
+
+    await runAssistantRequest(assistantMessageId, requestMessage, selectedAttachment);
+  };
+
+  const applySettings = async (nextSettings: ChatSettingsValue) => {
+    const workerChanged = nextSettings.workerId !== settings.workerId;
+    const normalizedSettings = {
+      ...nextSettings,
+      agentId: workerChanged ? 'default' : nextSettings.agentId,
+    };
+    const contextChanged = setSessionContext(
+      normalizedSettings.workerId,
+      normalizedSettings.agentId,
+    );
+    setSettings(normalizedSettings);
+
+    if (!contextChanged) return;
+
+    setHistoryLoading(true);
+    setMessages([]);
+    try {
+      const [history, nextAgents, nextWorkers] = await Promise.all([
+        initializeWorkerHub(),
+        listWorkerHubAgents(),
+        listWorkerHubWorkers(),
+      ]);
+      setMessages(history.map((message) => ({ ...message, historical: true })));
+      setAgents(nextAgents);
+      setWorkers(nextWorkers);
+    } catch (error) {
+      console.error('[App] 切换会话配置失败：', error);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   return (
     <main className="chat-page">
       <section className="chat-shell" aria-label="物业助手在线客服">
-        <header className="chat-header">
-          <div className="brand-lockup">
-            <span className="brand-mark" aria-hidden="true"><span /></span>
-            <span>物业助手</span>
-          </div>
-          <div className="header-actions">
-            <SwitchRole />
-            <button type="button" aria-label="开启或关闭声音"><AudioFilled /></button>
-            <button type="button" aria-label="最小化窗口">—</button>
-          </div>
-        </header>
-
-        <div className="chat-scroll" ref={chatScrollRef}>
-          <div className="customer-message">{timeSpan}</div>
-          
-          <div className="agent-row">
-            <div className="agent-avatar" aria-hidden="true"><span /></div>
-            <div className="agent-content">
-              <div className="welcome-bubble">
-                <strong>▷ 我是你的物业管家！</strong>
-                <span>欢迎咨询，竭诚为您服务，请问有什么可以帮您</span>
-                <span className="sparkles">✨ ✨ ✨</span>
-              </div>
-            </div>
-          </div>
-
-          <Bubble.List
-            className="message-list"
-            items={bubbleItems}
-            role={bubbleRoles}
-            autoScroll={false}
-            aria-live="polite"
-          />
-        </div>
-
-      <footer className="chat-footer">
-        <PromptList onItemClick={promptClick}/>
-        {attachment && (
-          <div className="sender-attachment" role="status">
-            <span className="sender-attachment-name" title={attachment.name}>📎 {attachment.name}</span>
-            <button type="button" onClick={() => setAttachment(null)} aria-label="移除附件">×</button>
-          </div>
-        )}
-        <input
-          ref={fileInputRef}
-          className="sender-file-input"
-          type="file"
-          accept="image/*,.pdf,.doc,.docx,.txt"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            event.target.value = '';
-            if (!file) return;
-            if (file.size > 10 * 1024 * 1024) {
-              window.alert('附件不能超过 10MB');
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = () => {
-              if (typeof reader.result !== 'string') return;
-              setAttachment({
-                name: file.name,
-                type: file.type || 'application/octet-stream',
-                size: file.size,
-                dataUrl: reader.result,
-              });
-            };
-            reader.readAsDataURL(file);
+        <ChatHeader
+          settings={settings}
+          workerOptions={workerOptions}
+          agentOptions={agentOptions}
+          settingsDisabled={loading || historyLoading}
+          onSettingsChange={applySettings}
+        />
+        <ChatConversation
+          messages={messages}
+          historyLoading={historyLoading}
+          loading={loading}
+          scrollRef={chatScrollRef}
+          onRetry={(message) => {
+            void retryMessage(message);
           }}
         />
-        <Sender
-            className="chat-sender"
-            value={inputValue}
-            loading={loading}
-            disabled={historyLoading}
-            placeholder="请输入您想要咨询的问题"
-            autoSize={{ minRows: 1, maxRows: 5 }}
-            onChange={setInputValue}
-            onSubmit={submitQuestion}
-            suffix={(_, { components: { SendButton } }) => (
-              <div className="sender-actions">
-                <button type="button" disabled={historyLoading} aria-label="选择表情">
-                  <SmileOutlined />
-                </button>
-                <button
-                  type="button"
-                  disabled={historyLoading || loading}
-                  aria-label="上传附件"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <PlusOutlined />
-                </button>
-                <span className="sender-divider" aria-hidden="true" />
-                <SendButton
-                  className="sender-submit"
-                  type="text"
-                  icon={<SendOutlined />}
-                  aria-label="发送"
-                />
-              </div>
-            )}
-            footer={false}
-          />
-          <div className="sender-support-copy">DeepDataWorker提供技术支持</div>
-        </footer>
+        <ChatComposer
+          loading={loading}
+          historyLoading={historyLoading}
+          onSubmit={submitQuestion}
+          onCancel={() => {
+            void cancelWorkerHubMessage();
+          }}
+        />
       </section>
     </main>
   );

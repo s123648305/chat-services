@@ -1,12 +1,21 @@
 import {
   convertHistoryResponse,
   CustomerRelayClient,
+  type CustomerWorker,
 } from '@szdeepdata/customer-relay-sdk';
 import { useCallback, useEffect, useRef } from 'react';
 
 type StreamHandlers = {
   onDelta: (text: string) => void;
   onFinal: (text: string) => void;
+  onAbort?: () => void;
+};
+
+type ActiveChatRequest = {
+  relaySessionId: string;
+  sessionKey: string;
+  runId?: string;
+  cancelLocal: () => void;
 };
 
 export type ChatAttachment = {
@@ -35,6 +44,8 @@ export type WorkerHubAgent = Record<string, unknown> & {
   name?: string;
   isDefault?: boolean;
 };
+
+export type WorkerHubWorker = CustomerWorker;
 
 const sessionStorageKey = 'worker-hub-session-key';
 
@@ -140,7 +151,12 @@ export function useWorkerHub() {
   const clientRef = useRef<CustomerRelayClient | null>(null);
   const sessionPromiseRef = useRef<Promise<string> | null>(null);
   const chatSessionKeyPromiseRef = useRef<Promise<string> | null>(null);
+  const agentsPromiseRef = useRef<Promise<WorkerHubAgent[]> | null>(null);
+  const workersPromiseRef = useRef<Promise<WorkerHubWorker[]> | null>(null);
+  const activeChatRequestRef = useRef<ActiveChatRequest | null>(null);
   const relaySessionIdRef = useRef<string | null>(null);
+  const workerIdRef = useRef(__WORKER_HUB_WORKER_ID__);
+  const agentIdRef = useRef('default');
   const closeTimerRef = useRef<number | null>(null);
 
   const getClient = useCallback(() => {
@@ -155,6 +171,9 @@ export function useWorkerHub() {
     clientRef.current = null;
     sessionPromiseRef.current = null;
     chatSessionKeyPromiseRef.current = null;
+    agentsPromiseRef.current = null;
+    workersPromiseRef.current = null;
+    activeChatRequestRef.current = null;
     relaySessionIdRef.current = null;
   }, []);
 
@@ -162,7 +181,7 @@ export function useWorkerHub() {
     if (!sessionPromiseRef.current) {
       const client = getClient();
       sessionPromiseRef.current = (async () => {
-        const relay = await client.openSession(__WORKER_HUB_WORKER_ID__);
+        const relay = await client.openSession(workerIdRef.current);
         relaySessionIdRef.current = relay.relaySessionId;
         return relay.relaySessionId;
       })().catch((error) => {
@@ -175,17 +194,56 @@ export function useWorkerHub() {
   }, [getClient]);
 
   const listAgents = useCallback(async () => {
-    const client = getClient();
-    const relaySessionId = await ensureChatSession();
-    const response = await client.listAgents(relaySessionId);
-    const agents = readAgents(response);
+    if (!agentsPromiseRef.current) {
+      const client = getClient();
+      agentsPromiseRef.current = (async () => {
+        const relaySessionId = await ensureChatSession();
+        const response = await client.listAgents(relaySessionId);
+        const agents = readAgents(response);
 
-    console.info('[WorkerHub][listAgents] Agent 列表加载完成：', {
-      agentIds: agents.map((agent) => agent.agentId),
-      agents,
-    });
-    return agents;
+        console.info('[WorkerHub][listAgents] Agent 列表加载完成：', {
+          agentIds: agents.map((agent) => agent.agentId),
+          agents,
+        });
+        return agents;
+      })().catch((error) => {
+        agentsPromiseRef.current = null;
+        throw error;
+      });
+    }
+
+    return agentsPromiseRef.current;
   }, [ensureChatSession, getClient]);
+
+  const listWorkers = useCallback(async () => {
+    if (!workersPromiseRef.current) {
+      const client = getClient();
+      workersPromiseRef.current = (async () => {
+        const pageSize = 100;
+        const firstPage = await client.listWorkers({ page: 1, pageSize });
+        const workers = [...firstPage.data];
+
+        for (let page = 2; page <= firstPage.pagination.totalPages; page += 1) {
+          const response = await client.listWorkers({ page, pageSize });
+          workers.push(...response.data);
+        }
+
+        const uniqueWorkers = [...new Map(
+          workers.map((worker) => [worker.workerId, worker]),
+        ).values()];
+        console.info('[WorkerHub][listWorkers] Worker list loaded.', {
+          workerIds: uniqueWorkers.map((worker) => worker.workerId),
+          workers: uniqueWorkers,
+        });
+        return uniqueWorkers;
+      })().catch((error) => {
+        workersPromiseRef.current = null;
+        throw error;
+      });
+    }
+
+    return workersPromiseRef.current;
+  }, [getClient]);
 
   const getSessionKey = useCallback((relaySessionId: string) => {
     const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
@@ -194,7 +252,7 @@ export function useWorkerHub() {
     if (!chatSessionKeyPromiseRef.current) {
       const client = getClient();
       chatSessionKeyPromiseRef.current = client
-        .createSession<Record<string, unknown>>(relaySessionId, { agentId: 'default' })
+        .createSession<Record<string, unknown>>(relaySessionId, { agentId: agentIdRef.current })
         .then((result) => {
           const sessionKey = [
             result.sessionKey,
@@ -249,6 +307,7 @@ export function useWorkerHub() {
     options: SendMessageOptions = {},
   ) => {
     const client = getClient();
+    let cancelled = false;
     console.info('[WorkerHub][sendMessage] 开始发送：', { message });
 
     try {
@@ -260,6 +319,7 @@ export function useWorkerHub() {
       let timeout = 0;
       let resolvedRunId: string | undefined;
       let finishStream: (error?: Error) => void = () => {};
+      let unsubscribe: () => void = () => {};
 
       const waitForStream = new Promise<void>((resolve, reject) => {
         const finish = (error?: Error) => {
@@ -271,7 +331,7 @@ export function useWorkerHub() {
         };
         finishStream = finish;
 
-        let unsubscribe = client.on('relay.event:chat', (event) => {
+        unsubscribe = client.on('relay.event:chat', (event) => {
           if (!isRecord(event) || !isRecord(event.data)) return;
 
           const data = event.data;
@@ -309,6 +369,19 @@ export function useWorkerHub() {
         }, 120_000);
       });
 
+      const activeRequest: ActiveChatRequest = {
+        relaySessionId,
+        sessionKey,
+        cancelLocal: () => {
+          if (settled) return;
+          cancelled = true;
+          unsubscribe();
+          handlers.onAbort?.();
+          finishStream();
+        },
+      };
+      activeChatRequestRef.current = activeRequest;
+
 
       const requestPayload = {
         sessionKey,
@@ -324,6 +397,7 @@ export function useWorkerHub() {
       const runId = isRecord(result) ? result.runId : undefined;
       if (typeof runId === 'string') {
         resolvedRunId = runId;
+        activeRequest.runId = runId;
         console.info('[WorkerHub][sendMessage] SDK 已受理消息：', { runId });
       } else {
         const finalText = extractMessageText(result);
@@ -335,13 +409,66 @@ export function useWorkerHub() {
       }
 
       await waitForStream;
+      if (activeChatRequestRef.current === activeRequest) {
+        activeChatRequestRef.current = null;
+      }
       console.info('[WorkerHub][sendMessage] 本次消息处理完成。');
     } catch (error) {
+      if (cancelled) {
+        console.info('[WorkerHub][sendMessage] 本次消息已由用户取消。');
+        return;
+      }
+      activeChatRequestRef.current = null;
       console.error('[WorkerHub][sendMessage] 通信失败：', error);
       resetClient();
       throw error;
     }
   }, [ensureChatSession, getClient, getSessionKey, resetClient]);
+
+  const cancelMessage = useCallback(async () => {
+    const activeRequest = activeChatRequestRef.current;
+    if (!activeRequest) return false;
+
+    activeChatRequestRef.current = null;
+    activeRequest.cancelLocal();
+    console.info('[WorkerHub][cancelMessage] 正在取消消息：', {
+      sessionKey: activeRequest.sessionKey,
+      runId: activeRequest.runId,
+    });
+
+    try {
+      await getClient().abortChat(
+        activeRequest.relaySessionId,
+        {
+          sessionKey: activeRequest.sessionKey,
+          ...(activeRequest.runId ? { runId: activeRequest.runId } : {}),
+        },
+        { timeoutMs: 30_000 },
+      );
+      console.info('[WorkerHub][cancelMessage] 消息取消完成。');
+      return true;
+    } catch (error) {
+      console.error('[WorkerHub][cancelMessage] 取消请求失败：', error);
+      return false;
+    }
+  }, [getClient]);
+
+  const setSessionContext = useCallback((workerId: string, agentId: string) => {
+    const nextWorkerId = workerId.trim() || __WORKER_HUB_WORKER_ID__;
+    const nextAgentId = agentId.trim() || 'default';
+    const changed = workerIdRef.current !== nextWorkerId || agentIdRef.current !== nextAgentId;
+    if (!changed) return false;
+
+    workerIdRef.current = nextWorkerId;
+    agentIdRef.current = nextAgentId;
+    window.localStorage.removeItem(sessionStorageKey);
+    resetClient();
+    console.info('[WorkerHub][setSessionContext] 会话上下文已切换：', {
+      workerId: nextWorkerId,
+      agentId: nextAgentId,
+    });
+    return true;
+  }, [resetClient]);
 
   useEffect(() => {
     if (closeTimerRef.current !== null) {
@@ -357,5 +484,12 @@ export function useWorkerHub() {
     };
   }, [resetClient]);
 
-  return { initialize, listAgents, sendMessage };
+  return {
+    cancelMessage,
+    initialize,
+    listAgents,
+    listWorkers,
+    sendMessage,
+    setSessionContext,
+  };
 }

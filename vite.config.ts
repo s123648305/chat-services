@@ -39,6 +39,11 @@ export default defineConfig(({ mode }) => {
       headers: { Authorization: authorization },
       rewrite: (path) => path.replace(/^\/workerhub-api/, ''),
     },
+    '/v1/workers': {
+      target: `${apiProtocol}//${relayTarget.host}`,
+      changeOrigin: true,
+      headers: { Authorization: authorization },
+    },
   };
 
     return {

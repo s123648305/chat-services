@@ -154,6 +154,120 @@ button {
   font-size: 22px;
 }
 
+.chat-settings-trigger {
+  display: grid !important;
+  width: 36px;
+  height: 36px !important;
+  place-items: center;
+  border-radius: 50% !important;
+}
+
+.chat-settings-trigger:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+.chat-settings-drawer {
+  width: min(100%, 890px) !important;
+  max-height: 85vh;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 18px 18px 0 0;
+}
+
+.chat-settings-drawer .ant-drawer-header {
+  min-height: 54px;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.chat-settings-drawer .ant-drawer-title {
+  font-size: 17px;
+}
+
+.chat-settings-drawer .ant-drawer-body {
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+}
+
+.chat-settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+.chat-settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-settings-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-settings-label strong {
+  color: #262626;
+  font-size: 15px;
+}
+
+.chat-settings-label span {
+  overflow: hidden;
+  color: #8c8c8c;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-settings-field .ant-radio-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chat-settings-field .ant-radio-button-wrapper {
+  text-align: center;
+}
+
+.chat-settings-field .ant-select,
+.chat-settings-field .ant-select-auto-complete {
+  width: 100%;
+}
+
+.chat-settings-field .ant-input,
+.chat-settings-field .ant-select-selector {
+  min-height: 40px !important;
+}
+
+.chat-settings-save {
+  height: 44px;
+  margin-top: 2px;
+  border-radius: 12px;
+  background: #a67d47;
+  box-shadow: none;
+}
+
+.chat-settings-save:hover:not(:disabled) {
+  background: #8f693a !important;
+}
+
+@media (max-width: 480px) {
+  .chat-settings-drawer {
+    border-radius: 16px 16px 0 0;
+  }
+
+  .chat-settings-drawer .ant-drawer-header {
+    padding-inline: 16px;
+  }
+
+  .chat-settings-drawer .ant-drawer-body {
+    padding: 10px 16px max(16px, env(safe-area-inset-bottom));
+  }
+
+  .chat-settings-form {
+    gap: 14px;
+  }
+}
+
 .chat-scroll {
   min-height: 0;
   flex: 1 1 auto;
@@ -200,7 +314,7 @@ button {
   color: #92979d;
   border-radius: 11px;
   background: #fff;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .agent-row {
@@ -231,14 +345,12 @@ button {
 
 .welcome-bubble {
   display: flex;
-  min-height: 123px;
   padding: 15px 20px;
   flex-direction: column;
   gap: 6px;
   border-radius: 10px;
   background: #fff;
-  font-size: 19px;
-  line-height: 1.4;
+  font-size: 14px;
 }
 
 .welcome-bubble strong {
@@ -523,6 +635,52 @@ button {
   margin-bottom: 0;
 }
 
+.message-bubble.assistant .xmd-tail {
+  display: inline-block;
+  margin-inline-start: 4px;
+  color: #a67d47;
+  font-size: 8px;
+  vertical-align: middle;
+  animation: stream-tail-pulse 1s ease-in-out infinite;
+}
+
+.message-retry-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7d8794;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.message-retry-button:hover:not(:disabled) {
+  color: #a67d47;
+  background: rgba(166, 125, 71, 0.08);
+}
+
+.message-retry-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@keyframes stream-tail-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 /* Keep markdown tables readable on narrow chat bubbles and scroll them horizontally. */
 .message-bubble.assistant .x-markdown table:not(pre) {
   width: max-content;
@@ -728,6 +886,10 @@ button {
   background: transparent;
 }
 
+.sender-actions .sender-loading {
+  color: #a67d47;
+}
+
 .sender-support-copy {
   margin-top: 5px;
   color: #c5ccd6;
@@ -785,7 +947,6 @@ button {
   .welcome-bubble {
     min-height: auto;
     padding: 14px;
-    font-size: 15px;
   }
 
   .message-list {
