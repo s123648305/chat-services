@@ -11,5 +11,6 @@ export type ChatMessage = {
   retryPayload?: {
     message: string;
     attachment: ChatAttachment | null;
+    idempotencyKey: string;
   };
 };

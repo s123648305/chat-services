@@ -15,8 +15,7 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "@workerHub": ["lib/uni-app-sdk/dist/index.d.ts"],
-      "@szdeepdata/customer-relay-sdk": ["../project/sdk/index.d.ts"]
+      "@szdeepdata/customer-relay-sdk": ["../project/sdk/dist/index.d.ts"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

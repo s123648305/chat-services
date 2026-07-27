@@ -1,7 +1,9 @@
 import {
   convertHistoryResponse,
+  CustomerApiClient,
   CustomerRelayClient,
   type CustomerWorker,
+  type WorkerAgent,
 } from '@szdeepdata/customer-relay-sdk';
 import { useCallback, useEffect, useRef } from 'react';
 
@@ -27,6 +29,7 @@ export type ChatAttachment = {
 
 export type SendMessageOptions = {
   attachments?: ChatAttachment[];
+  idempotencyKey?: string;
   userInfo?: Record<string, unknown>;
   token?: string;
   role?: string;
@@ -39,11 +42,7 @@ export type WorkerHubHistoryMessage = {
   content: string;
 };
 
-export type WorkerHubAgent = Record<string, unknown> & {
-  agentId: string;
-  name?: string;
-  isDefault?: boolean;
-};
+export type WorkerHubAgent = WorkerAgent & Record<string, unknown>;
 
 export type WorkerHubWorker = CustomerWorker;
 
@@ -55,22 +54,25 @@ function createRelayUrl() {
   return url.toString();
 }
 
+function createApiUrl() {
+  return window.location.origin;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function buildMessage(message:string,context:Record<string,unknown>){
+function buildMessage(message: string, context: Record<string, unknown>) {
   const data = {
-    workerRelay:context,
-    message
-  }
-  let jsrContext = message
-   try {
-    jsrContext = JSON.stringify(data)
-   } catch (error) {
+    workerRelay: context,
+    message,
+  };
 
-   }
-   return jsrContext
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return message;
+  }
 }
 
 function extractMessageText(value: unknown): string {
@@ -116,6 +118,9 @@ function readHistoryMessages(response: unknown): WorkerHubHistoryMessage[] {
 }
 
 function readAgents(response: unknown): WorkerHubAgent[] {
+  const defaultAgentId = isRecord(response) && typeof response.defaultAgentId === 'string'
+    ? response.defaultAgentId
+    : undefined;
   const list = Array.isArray(response)
     ? response
     : isRecord(response)
@@ -133,13 +138,17 @@ function readAgents(response: unknown): WorkerHubAgent[] {
         ...agent,
         agentId,
         ...(typeof agent.name === 'string' ? { name: agent.name } : {}),
-        ...(typeof agent.isDefault === 'boolean' ? { isDefault: agent.isDefault } : {}),
+        ...(typeof agent.isDefault === 'boolean'
+          ? { isDefault: agent.isDefault }
+          : defaultAgentId === agentId
+            ? { isDefault: true }
+            : {}),
       };
     })
     .filter((agent): agent is WorkerHubAgent => agent !== null);
 }
 
-function createClient() {
+function createRelayClient() {
   return new CustomerRelayClient({
     url: createRelayUrl(),
     apiKey: __WORKER_HUB_API_KEY__,
@@ -147,8 +156,17 @@ function createClient() {
   });
 }
 
+function createApiClient() {
+  return new CustomerApiClient({
+    url: createApiUrl(),
+    apiKey: __WORKER_HUB_API_KEY__,
+    defaultTimeoutMs: 60_000,
+  });
+}
+
 export function useWorkerHub() {
-  const clientRef = useRef<CustomerRelayClient | null>(null);
+  const relayClientRef = useRef<CustomerRelayClient | null>(null);
+  const apiClientRef = useRef<CustomerApiClient | null>(null);
   const sessionPromiseRef = useRef<Promise<string> | null>(null);
   const chatSessionKeyPromiseRef = useRef<Promise<string> | null>(null);
   const agentsPromiseRef = useRef<Promise<WorkerHubAgent[]> | null>(null);
@@ -159,16 +177,23 @@ export function useWorkerHub() {
   const agentIdRef = useRef('default');
   const closeTimerRef = useRef<number | null>(null);
 
-  const getClient = useCallback(() => {
-    if (!clientRef.current) {
-      clientRef.current = createClient();
+  const getRelayClient = useCallback(() => {
+    if (!relayClientRef.current) {
+      relayClientRef.current = createRelayClient();
     }
-    return clientRef.current;
+    return relayClientRef.current;
+  }, []);
+
+  const getApiClient = useCallback(() => {
+    if (!apiClientRef.current) {
+      apiClientRef.current = createApiClient();
+    }
+    return apiClientRef.current;
   }, []);
 
   const resetClient = useCallback(() => {
-    clientRef.current?.disconnect();
-    clientRef.current = null;
+    relayClientRef.current?.disconnect();
+    relayClientRef.current = null;
     sessionPromiseRef.current = null;
     chatSessionKeyPromiseRef.current = null;
     agentsPromiseRef.current = null;
@@ -179,7 +204,7 @@ export function useWorkerHub() {
 
   const ensureChatSession = useCallback(() => {
     if (!sessionPromiseRef.current) {
-      const client = getClient();
+      const client = getRelayClient();
       sessionPromiseRef.current = (async () => {
         const relay = await client.openSession(workerIdRef.current);
         relaySessionIdRef.current = relay.relaySessionId;
@@ -191,15 +216,19 @@ export function useWorkerHub() {
     }
 
     return sessionPromiseRef.current;
-  }, [getClient]);
+  }, [getRelayClient]);
 
   const listAgents = useCallback(async () => {
     if (!agentsPromiseRef.current) {
-      const client = getClient();
+      const client = getApiClient();
       agentsPromiseRef.current = (async () => {
-        const relaySessionId = await ensureChatSession();
-        const response = await client.listAgents(relaySessionId);
+        const response = await client.listWorkerAgents(workerIdRef.current);
         const agents = readAgents(response);
+
+        if (!agents.some((agent) => agent.agentId === agentIdRef.current)) {
+          const fallbackAgent = agents.find((agent) => agent.isDefault) ?? agents[0];
+          if (fallbackAgent) agentIdRef.current = fallbackAgent.agentId;
+        }
 
         console.info('[WorkerHub][listAgents] Agent 列表加载完成：', {
           agentIds: agents.map((agent) => agent.agentId),
@@ -213,11 +242,11 @@ export function useWorkerHub() {
     }
 
     return agentsPromiseRef.current;
-  }, [ensureChatSession, getClient]);
+  }, [getApiClient]);
 
   const listWorkers = useCallback(async () => {
     if (!workersPromiseRef.current) {
-      const client = getClient();
+      const client = getApiClient();
       workersPromiseRef.current = (async () => {
         const pageSize = 100;
         const firstPage = await client.listWorkers({ page: 1, pageSize });
@@ -243,14 +272,14 @@ export function useWorkerHub() {
     }
 
     return workersPromiseRef.current;
-  }, [getClient]);
+  }, [getApiClient]);
 
   const getSessionKey = useCallback((relaySessionId: string) => {
     const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
     if (existingSessionKey) return Promise.resolve(existingSessionKey);
 
     if (!chatSessionKeyPromiseRef.current) {
-      const client = getClient();
+      const client = getRelayClient();
       chatSessionKeyPromiseRef.current = client
         .createSession<Record<string, unknown>>(relaySessionId, { agentId: agentIdRef.current })
         .then((result) => {
@@ -276,10 +305,10 @@ export function useWorkerHub() {
     }
 
     return chatSessionKeyPromiseRef.current;
-  }, [getClient]);
+  }, [getRelayClient]);
 
   const initialize = useCallback(async () => {
-    const client = getClient();
+    const client = getRelayClient();
     console.info('[WorkerHub][initialize] 正在连接并加载历史会话…');
 
     try {
@@ -299,15 +328,16 @@ export function useWorkerHub() {
       resetClient();
       throw error;
     }
-  }, [ensureChatSession, getClient, getSessionKey, listAgents, resetClient]);
+  }, [ensureChatSession, getRelayClient, getSessionKey, listAgents, resetClient]);
 
   const sendMessage = useCallback(async (
     message: string,
     handlers: StreamHandlers,
     options: SendMessageOptions = {},
   ) => {
-    const client = getClient();
+    const client = getRelayClient();
     let cancelled = false;
+    let cleanupStream = () => {};
     console.info('[WorkerHub][sendMessage] 开始发送：', { message });
 
     try {
@@ -335,6 +365,10 @@ export function useWorkerHub() {
           if (!isRecord(event) || !isRecord(event.data)) return;
 
           const data = event.data;
+          const eventSessionKey = typeof data.sessionKey === 'string'
+            ? data.sessionKey
+            : undefined;
+          if (eventSessionKey && eventSessionKey !== sessionKey) return;
           const runId = typeof data.runId === 'string' ? data.runId : undefined;
           if (resolvedRunId && runId && runId !== resolvedRunId) return;
 
@@ -368,6 +402,10 @@ export function useWorkerHub() {
           finish(new Error('处理超时，请稍后重试。'));
         }, 120_000);
       });
+      cleanupStream = () => {
+        unsubscribe();
+        finishStream();
+      };
 
       const activeRequest: ActiveChatRequest = {
         relaySessionId,
@@ -383,9 +421,14 @@ export function useWorkerHub() {
       activeChatRequestRef.current = activeRequest;
 
 
+      const {
+        idempotencyKey = crypto.randomUUID(),
+        ...messageContext
+      } = options;
       const requestPayload = {
         sessionKey,
-        message: buildMessage(message,options),
+        message: buildMessage(message, messageContext),
+        idempotencyKey,
       };
       console.info('[WorkerHub][sendMessage] 请求参数：', requestPayload);
 
@@ -418,12 +461,13 @@ export function useWorkerHub() {
         console.info('[WorkerHub][sendMessage] 本次消息已由用户取消。');
         return;
       }
+      cleanupStream();
       activeChatRequestRef.current = null;
       console.error('[WorkerHub][sendMessage] 通信失败：', error);
       resetClient();
       throw error;
     }
-  }, [ensureChatSession, getClient, getSessionKey, resetClient]);
+  }, [ensureChatSession, getRelayClient, getSessionKey, resetClient]);
 
   const cancelMessage = useCallback(async () => {
     const activeRequest = activeChatRequestRef.current;
@@ -437,7 +481,7 @@ export function useWorkerHub() {
     });
 
     try {
-      await getClient().abortChat(
+      await getRelayClient().abortChat(
         activeRequest.relaySessionId,
         {
           sessionKey: activeRequest.sessionKey,
@@ -451,7 +495,7 @@ export function useWorkerHub() {
       console.error('[WorkerHub][cancelMessage] 取消请求失败：', error);
       return false;
     }
-  }, [getClient]);
+  }, [getRelayClient]);
 
   const setSessionContext = useCallback((workerId: string, agentId: string) => {
     const nextWorkerId = workerId.trim() || __WORKER_HUB_WORKER_ID__;

@@ -24,6 +24,13 @@ const initialSettings: ChatSettingsValue = {
   agentId: 'default',
 };
 
+function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
+  if (agents.some((agent) => agent.agentId === currentAgentId)) return currentAgentId;
+  return agents.find((agent) => agent.isDefault)?.agentId
+    ?? agents[0]?.agentId
+    ?? currentAgentId;
+}
+
 export default function App() {
   const {
     cancelMessage: cancelWorkerHubMessage,
@@ -54,6 +61,10 @@ export default function App() {
         setMessages(history.map((message) => ({ ...message, historical: true })));
         setAgents(nextAgents);
         setWorkers(nextWorkers);
+        setSettings((current) => ({
+          ...current,
+          agentId: resolveAgentId(nextAgents, current.agentId),
+        }));
       })
       .catch((error: unknown) => {
         if (active) console.error('[App] 历史会话加载失败：', error);
@@ -120,6 +131,7 @@ export default function App() {
     assistantMessageId: string,
     requestMessage: string,
     selectedAttachment: ChatAttachment | null,
+    idempotencyKey: string,
   ) => {
     setLoading(true);
 
@@ -143,6 +155,7 @@ export default function App() {
           );
         },
       }, {
+        idempotencyKey,
         userInfo: {
           ...baseUserInfo,
           role: settings.role,
@@ -174,6 +187,7 @@ export default function App() {
       message.id,
       message.retryPayload.message,
       message.retryPayload.attachment,
+      message.retryPayload.idempotencyKey,
     );
   };
 
@@ -200,11 +214,17 @@ export default function App() {
         retryPayload: {
           message: requestMessage,
           attachment: selectedAttachment,
+          idempotencyKey: requestId,
         },
       },
     ]);
 
-    await runAssistantRequest(assistantMessageId, requestMessage, selectedAttachment);
+    await runAssistantRequest(
+      assistantMessageId,
+      requestMessage,
+      selectedAttachment,
+      requestId,
+    );
   };
 
   const applySettings = async (nextSettings: ChatSettingsValue) => {
@@ -232,6 +252,10 @@ export default function App() {
       setMessages(history.map((message) => ({ ...message, historical: true })));
       setAgents(nextAgents);
       setWorkers(nextWorkers);
+      setSettings((current) => ({
+        ...current,
+        agentId: resolveAgentId(nextAgents, current.agentId),
+      }));
     } catch (error) {
       console.error('[App] 切换会话配置失败：', error);
     } finally {

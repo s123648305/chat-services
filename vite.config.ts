@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
       headers: { Authorization: authorization },
       rewrite: (path) => path.replace(/^\/workerhub-api/, ''),
     },
-    '/v1/workers': {
+    '/v1': {
       target: `${apiProtocol}//${relayTarget.host}`,
       changeOrigin: true,
       headers: { Authorization: authorization },
@@ -51,11 +51,6 @@ export default defineConfig(({ mode }) => {
     define: {
       __WORKER_HUB_WORKER_ID__: JSON.stringify(workerId),
       __WORKER_HUB_API_KEY__: JSON.stringify(apiKey),
-    },
-    resolve: {
-      alias: {
-        '@workerHub': '/lib/uni-app-sdk/dist/index.js',
-      },
     },
     server: {
       proxy: workerHubProxy,

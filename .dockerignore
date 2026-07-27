@@ -1,0 +1,7 @@
+*
+!dist/
+!dist/**
+!deploy/
+!deploy/Dockerfile
+!deploy/nginx.conf.template
+!deploy/docker-entrypoint.sh
