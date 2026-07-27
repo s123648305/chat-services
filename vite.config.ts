@@ -52,6 +52,9 @@ export default defineConfig(({ mode }) => {
       __WORKER_HUB_WORKER_ID__: JSON.stringify(workerId),
       __WORKER_HUB_API_KEY__: JSON.stringify(apiKey),
     },
+    build: {
+      outDir: 'h5',
+    },
     server: {
       proxy: workerHubProxy,
     },
