@@ -1,4 +1,11 @@
 /// <reference types="vite/client" />
 
-declare const __WORKER_HUB_WORKER_ID__: string;
-declare const __WORKER_HUB_API_KEY__: string;
+interface ImportMetaEnv {
+  readonly VITE_WORKER_HUB_API_KEY: string;
+  readonly VITE_WORKER_HUB_WORKERID: string;
+  readonly VITE_WORKER_HUB_WS_URL: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

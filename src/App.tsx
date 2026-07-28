@@ -10,6 +10,7 @@ import {
   type WorkerHubAgent,
   type WorkerHubWorker,
 } from './hooks/useWorkerHub';
+import { useVisualViewport } from './hooks/useVisualViewport';
 
 const baseUserInfo = {
   source: 'h5',
@@ -20,7 +21,7 @@ const baseUserInfo = {
 
 const initialSettings: ChatSettingsValue = {
   role: 'user',
-  workerId: __WORKER_HUB_WORKER_ID__,
+  workerId: import.meta.env.VITE_WORKER_HUB_WORKERID,
   agentId: 'default',
 };
 
@@ -32,6 +33,8 @@ function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
 }
 
 export default function App() {
+  useVisualViewport();
+
   const {
     cancelMessage: cancelWorkerHubMessage,
     initialize: initializeWorkerHub,

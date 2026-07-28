@@ -6,6 +6,10 @@ import {
   type WorkerAgent,
 } from '@szdeepdata/customer-relay-sdk';
 import { useCallback, useEffect, useRef } from 'react';
+import {
+  createWorkerHubApiUrl,
+  workerHubConfig,
+} from '../config/workerHub';
 
 type StreamHandlers = {
   onDelta: (text: string) => void;
@@ -49,13 +53,11 @@ export type WorkerHubWorker = CustomerWorker;
 const sessionStorageKey = 'worker-hub-session-key';
 
 function createRelayUrl() {
-  const url = new URL('/workerhub-relay', window.location.href);
-  url.protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return url.toString();
+  return 'wss://workerhub.szdeepdata.cn/v1/customer/relay'
 }
 
 function createApiUrl() {
-  return window.location.origin;
+    return window.location.origin;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -151,7 +153,7 @@ function readAgents(response: unknown): WorkerHubAgent[] {
 function createRelayClient() {
   return new CustomerRelayClient({
     url: createRelayUrl(),
-    apiKey: __WORKER_HUB_API_KEY__,
+    apiKey: workerHubConfig.apiKey,
     defaultTimeoutMs: 60_000,
   });
 }
@@ -159,7 +161,7 @@ function createRelayClient() {
 function createApiClient() {
   return new CustomerApiClient({
     url: createApiUrl(),
-    apiKey: __WORKER_HUB_API_KEY__,
+    apiKey: workerHubConfig.apiKey,
     defaultTimeoutMs: 60_000,
   });
 }
@@ -173,7 +175,7 @@ export function useWorkerHub() {
   const workersPromiseRef = useRef<Promise<WorkerHubWorker[]> | null>(null);
   const activeChatRequestRef = useRef<ActiveChatRequest | null>(null);
   const relaySessionIdRef = useRef<string | null>(null);
-  const workerIdRef = useRef(__WORKER_HUB_WORKER_ID__);
+  const workerIdRef = useRef(workerHubConfig.workerId);
   const agentIdRef = useRef('default');
   const closeTimerRef = useRef<number | null>(null);
 
@@ -275,36 +277,37 @@ export function useWorkerHub() {
   }, [getApiClient]);
 
   const getSessionKey = useCallback((relaySessionId: string) => {
-    const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
-    if (existingSessionKey) return Promise.resolve(existingSessionKey);
+    // const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
+    // if (existingSessionKey) return Promise.resolve(existingSessionKey);
 
-    if (!chatSessionKeyPromiseRef.current) {
-      const client = getRelayClient();
-      chatSessionKeyPromiseRef.current = client
-        .createSession<Record<string, unknown>>(relaySessionId, { agentId: agentIdRef.current })
-        .then((result) => {
-          const sessionKey = [
-            result.sessionKey,
-            result.key,
-            result.sessionId,
-            result.id,
-          ].find((value): value is string => typeof value === 'string' && value.length > 0);
+    // if (!chatSessionKeyPromiseRef.current) {
+    //   const client = getRelayClient();
+    //   chatSessionKeyPromiseRef.current = client
+    //     .createSession<Record<string, unknown>>(relaySessionId, { agentId: agentIdRef.current })
+    //     .then((result) => {
+    //       const sessionKey = [
+    //         result.sessionKey,
+    //         result.key,
+    //         result.sessionId,
+    //         result.id,
+    //       ].find((value): value is string => typeof value === 'string' && value.length > 0);
 
-          if (!sessionKey) {
-            throw new Error('WorkerHub 创建会话成功，但未返回 sessionKey。');
-          }
+    //       if (!sessionKey) {
+    //         throw new Error('WorkerHub 创建会话成功，但未返回 sessionKey。');
+    //       }
 
-          window.localStorage.setItem(sessionStorageKey, sessionKey);
-          console.info('[WorkerHub][createSession] 会话创建完成：', { sessionKey });
-          return sessionKey;
-        })
-        .catch((error) => {
-          chatSessionKeyPromiseRef.current = null;
-          throw error;
-        });
-    }
+    //       window.localStorage.setItem(sessionStorageKey, sessionKey);
+    //       console.info('[WorkerHub][createSession] 会话创建完成：', { sessionKey });
+    //       return sessionKey;
+    //     })
+    //     .catch((error) => {
+    //       chatSessionKeyPromiseRef.current = null;
+    //       throw error;
+    //     });
+    // }
 
-    return chatSessionKeyPromiseRef.current;
+    // return chatSessionKeyPromiseRef.current;
+    return '019fa6c6-dc92-79fc-b1f7-2ff94641e9ac'
   }, [getRelayClient]);
 
   const initialize = useCallback(async () => {
@@ -498,7 +501,7 @@ export function useWorkerHub() {
   }, [getRelayClient]);
 
   const setSessionContext = useCallback((workerId: string, agentId: string) => {
-    const nextWorkerId = workerId.trim() || __WORKER_HUB_WORKER_ID__;
+    const nextWorkerId = workerId.trim() || workerHubConfig.workerId;
     const nextAgentId = agentId.trim() || 'default';
     const changed = workerIdRef.current !== nextWorkerId || agentIdRef.current !== nextAgentId;
     if (!changed) return false;
