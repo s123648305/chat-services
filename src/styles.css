@@ -284,10 +284,8 @@ button {
 .chat-scroll {
   min-height: 0;
   flex: 1 1 auto;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 0 68px 24px;
-  scrollbar-width: thin;
-  scrollbar-color: #999 transparent;
 }
 
 .history-card {
@@ -322,12 +320,18 @@ button {
 
 .customer-message {
   width: fit-content;
-  margin: 20px auto;
   padding: 7px 13px;
   color: #92979d;
   border-radius: 11px;
   background: #fff;
   font-size: 14px;
+}
+
+.time-message-content,
+.welcome-message-content {
+  width: 100%;
+  padding: 0 !important;
+  background: transparent !important;
 }
 
 .agent-row {
@@ -358,6 +362,7 @@ button {
 
 .welcome-bubble {
   display: flex;
+  width: 100%;
   padding: 15px 20px;
   flex-direction: column;
   gap: 6px;
@@ -427,7 +432,7 @@ button {
   margin-bottom: -8px;
   border-radius: 3px;
   background: #a67d47;
-  content: '';
+  content: "";
 }
 
 .product-icon {
@@ -440,12 +445,12 @@ button {
   font-size: 44px;
   line-height: 1;
   text-shadow: 4px 3px 7px rgba(0, 0, 0, 0.2);
-  transform: scaleX(.75);
+  transform: scaleX(0.75);
 }
 
 .product-scrubber,
 .product-vacuum {
-  transform: rotate(-18deg) scaleX(.72);
+  transform: rotate(-18deg) scaleX(0.72);
 }
 
 .product-purifier {
@@ -586,9 +591,20 @@ button {
 }
 
 .message-list {
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   width: calc(100% + 56px);
-  margin: 16px 0;
+  margin: 0;
   margin-left: -56px;
+  scrollbar-width: thin;
+  scrollbar-color: #999 transparent;
+}
+
+.message-list .ant-bubble-list-scroll-box {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .message-bubble {
@@ -918,7 +934,7 @@ button {
 
 @media (max-width: 720px) {
   .chat-header {
-    height: 58px;
+    height: 50px;
     padding-inline: 14px;
   }
 
@@ -932,7 +948,7 @@ button {
   }
 
   .chat-scroll {
-    padding: 16px 12px 20px 44px;
+    padding: 10px 12px 10px 44px;
   }
 
   .history-card,
@@ -948,7 +964,6 @@ button {
   }
 
   .feedback-row {
-    
   }
 
   .agent-avatar {

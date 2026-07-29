@@ -4,18 +4,48 @@ import { XMarkdown } from '@ant-design/x-markdown';
 import '@ant-design/x-markdown/dist/x-markdown.css';
 import '@ant-design/x-markdown/themes/light.css';
 import dayjs from 'dayjs';
-import { useMemo, type Ref } from 'react';
+import { useMemo } from 'react';
 import type { ChatMessage } from './chatTypes';
 
 type ChatConversationProps = {
   messages: ChatMessage[];
   historyLoading: boolean;
   loading: boolean;
-  scrollRef: Ref<HTMLDivElement>;
   onRetry: (message: ChatMessage) => void;
 };
 
 const bubbleRoles: BubbleListProps['role'] = {
+  time: {
+    placement: 'start',
+    variant: 'borderless',
+    styles: {
+      root: {
+        justifyContent: 'center',
+        paddingInlineEnd: 0,
+      },
+    },
+    classNames: {
+      content: 'time-message-content',
+    },
+    contentRender: (content) => (
+      <div className="customer-message">{content}</div>
+    ),
+  },
+  welcome: {
+    placement: 'start',
+    variant: 'borderless',
+    styles: {
+      root: { paddingInlineEnd: 0 },
+    },
+    avatar: <div className="bubble-agent-avatar" aria-hidden="true"><span /></div>,
+    classNames: {
+      body: 'ai-message-body',
+      content: 'welcome-message-content',
+    },
+    contentRender: (content) => (
+      <div className="welcome-bubble">{content}</div>
+    ),
+  },
   user: {
     placement: 'end',
     variant: 'borderless',
@@ -56,47 +86,68 @@ export default function ChatConversation({
   messages,
   historyLoading,
   loading,
-  scrollRef,
   onRetry,
 }: ChatConversationProps) {
+  const timeLabel = useMemo(() => dayjs().format('YYYY-MM-DD HH:mm'), []);
+
   const bubbleItems = useMemo(() => {
-    const items = messages.map((message) => {
-      const streaming = message.status === 'streaming';
-      const failed = message.status === 'error';
-      const aborted = message.status === 'abort';
+    const items: BubbleListProps['items'] = [
+      {
+        key: 'conversation-time',
+        role: 'time',
+        content: <span>{timeLabel}</span>,
+        typing: false,
+      },
+      {
+        key: 'conversation-welcome',
+        role: 'welcome',
+        content: (
+          <>
+            <strong>▷ 我是你的物业管家！</strong>
+            <span>欢迎咨询，竭诚为您服务，请问有什么可以帮您</span>
+            <span className="sparkles">✨ ✨ ✨</span>
+          </>
+        ),
+        typing: false,
+      },
+      ...messages.map((message) => {
+        const streaming = message.status === 'streaming';
+        const failed = message.status === 'error';
+        const aborted = message.status === 'abort';
 
-      return {
-        key: message.id,
-        role: message.role === 'assistant' ? 'ai' : 'user',
-        content: message.content,
-        loading: streaming && message.content.length === 0,
-        streaming,
-        status: failed
-          ? 'error' as const
-          : streaming
-            ? 'updating' as const
-            : aborted
-              ? 'abort' as const
-              : 'success' as const,
-        ...(failed ? {
-          footer: (
-            <button
-              type="button"
-              className="message-retry-button"
-              disabled={loading}
-              onClick={() => onRetry(message)}
-            >
-              <ReloadOutlined />
-              <span>重新发送</span>
-            </button>
-          ),
-        } : {}),
-        ...(message.historical ? { typing: false } : {}),
-      };
-    });
+        return {
+          key: message.id,
+          role: message.role === 'assistant' ? 'ai' : 'user',
+          content: message.content,
+          loading: streaming && message.content.length === 0,
+          streaming,
+          status: failed
+            ? 'error' as const
+            : streaming
+              ? 'updating' as const
+              : aborted
+                ? 'abort' as const
+                : 'success' as const,
+          ...(failed ? {
+            footer: (
+              <button
+                type="button"
+                className="message-retry-button"
+                disabled={loading}
+                onClick={() => onRetry(message)}
+              >
+                <ReloadOutlined />
+                <span>重新发送</span>
+              </button>
+            ),
+          } : {}),
+          ...(message.historical ? { typing: false } : {}),
+        };
+      }),
+    ];
 
-    if (historyLoading && items.length === 0) {
-      return [{
+    if (historyLoading && messages.length === 0) {
+      items.push({
         key: 'history-loading',
         role: 'ai',
         content: '',
@@ -104,34 +155,19 @@ export default function ChatConversation({
         streaming: false,
         status: 'loading' as const,
         typing: false,
-      }];
+      });
     }
 
     return items;
-  }, [historyLoading, loading, messages, onRetry]);
-
-  const timeLabel = useMemo(() => dayjs().format('YYYY-MM-DD HH:mm'), []);
+  }, [historyLoading, loading, messages, onRetry, timeLabel]);
 
   return (
-    <div className="chat-scroll" ref={scrollRef}>
-      <div className="customer-message"><span>{timeLabel}</span></div>
-
-      <div className="agent-row">
-        <div className="agent-avatar" aria-hidden="true"><span /></div>
-        <div className="agent-content">
-          <div className="welcome-bubble">
-            <strong>▷ 我是你的物业管家！</strong>
-            <span>欢迎咨询，竭诚为您服务，请问有什么可以帮您</span>
-            <span className="sparkles">✨ ✨ ✨</span>
-          </div>
-        </div>
-      </div>
-
+    <div className="chat-scroll">
       <Bubble.List
         className="message-list"
         items={bubbleItems}
         role={bubbleRoles}
-        autoScroll={false}
+        autoScroll
         aria-live="polite"
       />
     </div>

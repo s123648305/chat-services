@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import ChatComposer from './components/ChatComposer';
 import ChatConversation from './components/ChatConversation';
 import ChatHeader from './components/ChatHeader';
@@ -33,7 +33,7 @@ function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
 }
 
 export default function App() {
-  useVisualViewport();
+  // useVisualViewport();
 
   const {
     cancelMessage: cancelWorkerHubMessage,
@@ -49,7 +49,6 @@ export default function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -106,13 +105,6 @@ export default function App() {
     }
     return options;
   }, [agents]);
-
-  useEffect(() => {
-    const chatScroll = chatScrollRef.current;
-    if (!chatScroll) return;
-
-    chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
-  }, [messages, loading]);
 
   const updateAssistantMessage = (
     messageId: string,
@@ -280,7 +272,6 @@ export default function App() {
           messages={messages}
           historyLoading={historyLoading}
           loading={loading}
-          scrollRef={chatScrollRef}
           onRetry={(message) => {
             void retryMessage(message);
           }}

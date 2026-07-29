@@ -277,37 +277,71 @@ export function useWorkerHub() {
   }, [getApiClient]);
 
   const getSessionKey = useCallback((relaySessionId: string) => {
-    // const existingSessionKey = window.localStorage.getItem(sessionStorageKey);
-    // if (existingSessionKey) return Promise.resolve(existingSessionKey);
+    const developmentSessionKey = import.meta.env.DEV
+      ? import.meta.env.VITE_WORKER_SESSION_ID?.trim()
+      : undefined;
+    if (developmentSessionKey) {
+      console.info('[WorkerHub][getSessionKey] 使用开发环境配置的会话。', {
+        sessionKey: developmentSessionKey,
+      });
+      return Promise.resolve(developmentSessionKey);
+    }
 
-    // if (!chatSessionKeyPromiseRef.current) {
-    //   const client = getRelayClient();
-    //   chatSessionKeyPromiseRef.current = client
-    //     .createSession<Record<string, unknown>>(relaySessionId, { agentId: agentIdRef.current })
-    //     .then((result) => {
-    //       const sessionKey = [
-    //         result.sessionKey,
-    //         result.key,
-    //         result.sessionId,
-    //         result.id,
-    //       ].find((value): value is string => typeof value === 'string' && value.length > 0);
+    const querySessionKey = new URLSearchParams(window.location.search)
+      .get('sid')
+      ?.trim();
+    if (querySessionKey) {
+      window.localStorage.setItem(sessionStorageKey, querySessionKey);
+      console.info('[WorkerHub][getSessionKey] 使用链接中的 sid。', {
+        sessionKey: querySessionKey,
+      });
+      return Promise.resolve(querySessionKey);
+    }
 
-    //       if (!sessionKey) {
-    //         throw new Error('WorkerHub 创建会话成功，但未返回 sessionKey。');
-    //       }
+    const storedSessionKey = window.localStorage
+      .getItem(sessionStorageKey)
+      ?.trim();
+    if (storedSessionKey) {
+      console.info('[WorkerHub][getSessionKey] 使用本地会话。', {
+        sessionKey: storedSessionKey,
+      });
+      return Promise.resolve(storedSessionKey);
+    }
 
-    //       window.localStorage.setItem(sessionStorageKey, sessionKey);
-    //       console.info('[WorkerHub][createSession] 会话创建完成：', { sessionKey });
-    //       return sessionKey;
-    //     })
-    //     .catch((error) => {
-    //       chatSessionKeyPromiseRef.current = null;
-    //       throw error;
-    //     });
-    // }
+    if (!chatSessionKeyPromiseRef.current) {
+      const client = getRelayClient();
+      chatSessionKeyPromiseRef.current = client
+        .createSession<Record<string, unknown>>(
+          relaySessionId,
+          { agentId: agentIdRef.current },
+        )
+        .then((result) => {
+          const sessionKey = [
+            result.sessionKey,
+            result.key,
+            result.sessionId,
+            result.id,
+          ].find((value): value is string => (
+            typeof value === 'string' && value.trim().length > 0
+          ))?.trim();
 
-    // return chatSessionKeyPromiseRef.current;
-    return '019fa6c6-dc92-79fc-b1f7-2ff94641e9ac'
+          if (!sessionKey) {
+            throw new Error('WorkerHub 创建会话成功，但未返回 sessionKey。');
+          }
+
+          window.localStorage.setItem(sessionStorageKey, sessionKey);
+          console.info('[WorkerHub][createSession] 会话创建完成：', {
+            sessionKey,
+          });
+          return sessionKey;
+        })
+        .catch((error) => {
+          chatSessionKeyPromiseRef.current = null;
+          throw error;
+        });
+    }
+
+    return chatSessionKeyPromiseRef.current;
   }, [getRelayClient]);
 
   const initialize = useCallback(async () => {
