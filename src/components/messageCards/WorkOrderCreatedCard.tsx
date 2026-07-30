@@ -6,11 +6,13 @@ import type {
 
 type WorkOrderCreatedCardProps = {
   data: WorkOrderCreatedCardData;
+  disabled?: boolean;
   onAction?: (action: MessageCardAction, data: WorkOrderCreatedCardData) => void;
 };
 
 export default function WorkOrderCreatedCard({
   data,
+  disabled = false,
   onAction,
 }: WorkOrderCreatedCardProps) {
   return (
@@ -18,12 +20,17 @@ export default function WorkOrderCreatedCard({
       <button
         type="button"
         className="work-order-created-card"
-        onClick={() => onAction?.('view', data)}
+        disabled={disabled}
+        onClick={() => onAction?.({
+          key: 'view',
+          label: data.progressText,
+          actionType: 'view',
+        }, data)}
       >
         <span className="work-order-success-icon" aria-hidden="true">✓</span>
         <span className="work-order-created-copy">
           <strong>工单<br />{data.orderNo} 已创建</strong>
-          <span>待受理 · {data.category} · {data.progressText}</span>
+          <span>{data.statusText} · {data.category} · {data.progressText}</span>
         </span>
         <RightOutlined className="work-order-created-arrow" />
       </button>

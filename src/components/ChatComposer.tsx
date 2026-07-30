@@ -5,9 +5,11 @@ import {
 } from '@ant-design/icons';
 import { Sender, type PromptsItemType } from '@ant-design/x';
 import { useRef, useState } from 'react';
+import { chatFeatureConfig } from '../config/chatFeatures';
 import type { ChatAttachment } from '../hooks/useWorkerHub';
 import EmojiPicker from './EmojiPicker';
 import PromptList from './promptsList';
+
 
 type ChatComposerProps = {
   loading: boolean;
@@ -26,6 +28,12 @@ export default function ChatComposer({
   onCancel,
   onScrollToBottom,
 }: ChatComposerProps) {
+  const {
+    showEmoji,
+    showAttachmentUpload,
+    supportText,
+  } = chatFeatureConfig.composer;
+  const showExtraActions = showEmoji || showAttachmentUpload;
   const [inputValue, setInputValue] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,9 +84,9 @@ export default function ChatComposer({
 
   const submit = (question: string) => {
     const content = question.trim();
-    if ((!content && !attachment) || loading || historyLoading) return;
+    const selectedAttachment = showAttachmentUpload ? attachment : null;
+    if ((!content && !selectedAttachment) || loading || historyLoading) return;
 
-    const selectedAttachment = attachment;
     setInputValue('');
     setAttachment(null);
     void onSubmit(content, selectedAttachment);
@@ -91,7 +99,7 @@ export default function ChatComposer({
   return (
     <footer className="chat-footer">
       <PromptList onItemClick={promptClick} />
-      {attachment && (
+      {showAttachmentUpload && attachment && (
         <div className="sender-attachment" role="status">
           <span className="sender-attachment-name" title={attachment.name}>
             📎 {attachment.name}
@@ -99,33 +107,35 @@ export default function ChatComposer({
           <button type="button" onClick={() => setAttachment(null)} aria-label="移除附件">×</button>
         </div>
       )}
-      <input
-        ref={fileInputRef}
-        className="sender-file-input"
-        type="file"
-        accept="image/*,.pdf,.doc,.docx,.txt"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          if (!file) return;
-          if (file.size > 10 * 1024 * 1024) {
-            window.alert('附件不能超过 10MB');
-            return;
-          }
+      {showAttachmentUpload && (
+        <input
+          ref={fileInputRef}
+          className="sender-file-input"
+          type="file"
+          accept="image/*,.pdf,.doc,.docx,.txt"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            if (file.size > 10 * 1024 * 1024) {
+              window.alert('附件不能超过 10MB');
+              return;
+            }
 
-          const reader = new FileReader();
-          reader.onload = () => {
-            if (typeof reader.result !== 'string') return;
-            setAttachment({
-              name: file.name,
-              type: file.type || 'application/octet-stream',
-              size: file.size,
-              dataUrl: reader.result,
-            });
-          };
-          reader.readAsDataURL(file);
-        }}
-      />
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result !== 'string') return;
+              setAttachment({
+                name: file.name,
+                type: file.type || 'application/octet-stream',
+                size: file.size,
+                dataUrl: reader.result,
+              });
+            };
+            reader.readAsDataURL(file);
+          }}
+        />
+      )}
       <div className="scroll-to-bottom-anchor">
         <button
           type="button"
@@ -133,7 +143,14 @@ export default function ChatComposer({
           aria-label="回到最新消息"
           aria-hidden={!showScrollToBottom}
           tabIndex={showScrollToBottom ? 0 : -1}
-          onClick={onScrollToBottom}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            event.currentTarget.blur();
+            onScrollToBottom();
+          }}
         >
           <ArrowDownOutlined />
         </button>
@@ -156,20 +173,26 @@ export default function ChatComposer({
           onCancel={onCancel}
           suffix={(_, { components: { SendButton, LoadingButton } }) => (
             <div className="sender-actions">
-              <EmojiPicker
-                disabled={historyLoading || loading}
-                onBeforeOpen={rememberSelection}
-                onSelect={insertEmoji}
-              />
-            <button
-              type="button"
-              disabled={historyLoading || loading}
-              aria-label="上传附件"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <PlusOutlined />
-              </button>
-              <span className="sender-divider" aria-hidden="true" />
+              {showEmoji && (
+                <EmojiPicker
+                  disabled={historyLoading || loading}
+                  onBeforeOpen={rememberSelection}
+                  onSelect={insertEmoji}
+                />
+              )}
+              {showAttachmentUpload && (
+                <button
+                  type="button"
+                  disabled={historyLoading || loading}
+                  aria-label="上传附件"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <PlusOutlined />
+                </button>
+              )}
+              {showExtraActions && (
+                <span className="sender-divider" aria-hidden="true" />
+              )}
               {loading ? (
                 <LoadingButton
                   className="sender-submit sender-loading"
@@ -181,7 +204,13 @@ export default function ChatComposer({
                   className="sender-submit"
                   type="text"
                   icon={<SendOutlined />}
-                  disabled={historyLoading || (!inputValue.trim() && !attachment)}
+                  disabled={
+                    historyLoading
+                    || (
+                      !inputValue.trim()
+                      && !(showAttachmentUpload && attachment)
+                    )
+                  }
                   aria-label="发送"
                 />
               )}
@@ -190,7 +219,7 @@ export default function ChatComposer({
           footer={false}
         />
       </div>
-      <div className="sender-support-copy">DeepDataWorker提供技术支持</div>
+      <div className="sender-support-copy">{supportText}</div>
     </footer>
   );
 }

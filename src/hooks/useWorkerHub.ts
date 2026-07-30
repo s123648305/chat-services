@@ -2,6 +2,8 @@ import {
   convertHistoryResponse,
   CustomerApiClient,
   CustomerRelayClient,
+  type CustomerChatActivity,
+  type CustomerChatDebugEvent,
   type CustomerWorker,
   type WorkerAgent,
 } from '@szdeepdata/customer-relay-sdk';
@@ -12,6 +14,8 @@ import {
 } from '../config/workerHub';
 
 type StreamHandlers = {
+  onActivity?: (activity: CustomerChatActivity) => void;
+  onDebug?: (event: CustomerChatDebugEvent) => void;
   onDelta: (text: string) => void;
   onFinal: (text: string) => void;
   onAbort?: () => void;
@@ -83,7 +87,10 @@ function isWorkOrderMessage(value: unknown): boolean {
     const normalized = rawType.toLowerCase().replace(/[\s_-]/g, '');
     return normalized.includes('工单')
       || normalized.includes('workorder')
-      || normalized === 'ticket';
+      || normalized === 'ticket'
+      || normalized === 'servicedraft'
+      || normalized === 'servicecreated'
+      || normalized === 'servicesuccess';
   });
 }
 
@@ -428,26 +435,30 @@ export function useWorkerHub() {
         };
         finishStream = finish;
 
-        unsubscribe = client.on('relay.event:chat', (event) => {
-          if (!isRecord(event) || !isRecord(event.data)) return;
-
+        unsubscribe = client.onChatEvent((event) => {
           const data = event.data;
-          const eventSessionKey = typeof data.sessionKey === 'string'
-            ? data.sessionKey
-            : undefined;
-          if (eventSessionKey && eventSessionKey !== sessionKey) return;
-          const runId = typeof data.runId === 'string' ? data.runId : undefined;
-          if (resolvedRunId && runId && runId !== resolvedRunId) return;
+          if (data.sessionKey !== sessionKey) return;
+          if (resolvedRunId && data.runId !== resolvedRunId) return;
 
-          const state = typeof data.state === 'string' ? data.state : '';
+          if (data.state === 'activity') {
+            console.info('[WorkerHub][sendMessage] 执行阶段：', data.activity);
+            handlers.onActivity?.(data.activity);
+            return;
+          }
 
-          if (state === 'delta' && typeof data.deltaText === 'string') {
+          if (data.state === 'debug') {
+            console.debug('[WorkerHub][sendMessage] 调试事件：', data.event);
+            handlers.onDebug?.(data.event);
+            return;
+          }
+
+          if (data.state === 'delta') {
             console.info('[WorkerHub][sendMessage] 接收增量：', data.deltaText);
             handlers.onDelta(data.deltaText);
             return;
           }
 
-          if (state === 'final') {
+          if (data.state === 'final') {
             const finalText = extractMessageText(
               isWorkOrderMessage(data) ? data : data.message,
             );
@@ -458,7 +469,15 @@ export function useWorkerHub() {
             return;
           }
 
-          if (state === 'error' || data.error === true) {
+          if (data.state === 'aborted') {
+            console.info('[WorkerHub][sendMessage] 服务端已终止生成。');
+            handlers.onAbort?.();
+            unsubscribe();
+            finish();
+            return;
+          }
+
+          if (data.state === 'error') {
             const errorText = extractMessageText(isRecord(data.error) ? data.error.message : data.error);
             console.error('[WorkerHub][sendMessage] 流式响应错误：', errorText || data);
             unsubscribe();
@@ -498,6 +517,7 @@ export function useWorkerHub() {
         sessionKey,
         message: buildMessage(message, messageContext),
         idempotencyKey,
+        visibility: workerHubConfig.visibility,
       };
       console.info('[WorkerHub][sendMessage] 请求参数：', requestPayload);
 

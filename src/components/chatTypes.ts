@@ -1,3 +1,7 @@
+import type {
+  CustomerChatActivity,
+  CustomerChatDebugEvent,
+} from '@szdeepdata/customer-relay-sdk';
 import type { ChatAttachment } from '../hooks/useWorkerHub';
 
 export type ChatMessageStatus = 'streaming' | 'success' | 'error' | 'abort';
@@ -7,6 +11,9 @@ export type ChatMessage = {
   role: 'user' | 'assistant';
   content: string;
   historical?: boolean;
+  responseDelayed?: boolean;
+  activity?: CustomerChatActivity;
+  debugEvents?: CustomerChatDebugEvent[];
   status?: ChatMessageStatus;
   retryPayload?: {
     message: string;

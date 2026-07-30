@@ -659,6 +659,191 @@ button {
   background: #fff;
 }
 
+.assistant-content-stack {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.thinking-status {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  color: #8c8c8c;
+}
+
+.thinking-status.is-compact {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.thinking-tip {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #e1e5ea;
+  border-radius: 12px;
+  background: #fff;
+  color: #8c96a3;
+}
+
+.thinking-tip-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+}
+
+.thinking-tip-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #1677ff;
+  opacity: 0.45;
+  animation: thinking-tip-dot 1.2s ease-in-out infinite;
+}
+
+.thinking-tip-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.thinking-tip-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.thinking-tip-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  animation: thinking-tip-label-enter 180ms ease-out;
+}
+
+.thinking-antx-root {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.thinking-antx-loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d6e4ff;
+  border-top-color: #1677ff;
+  border-radius: 50%;
+  animation: thinking-antx-spin 800ms linear infinite;
+}
+
+.thinking-antx-content {
+  padding-inline-start: 0 !important;
+  border-inline-start: 0 !important;
+}
+
+.thinking-debug-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: #a3acba;
+  font-size: 12px;
+}
+
+.thinking-debug-row {
+  min-width: 0;
+}
+
+.thinking-debug-row summary {
+  overflow: hidden;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinking-debug-row pre {
+  max-height: 160px;
+  margin: 6px 0 2px;
+  overflow: auto;
+  color: #7f8a99;
+  font: inherit;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.thinking-debug-thought {
+  color: #7f8a99;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.message-bubble.response-delayed {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #f3c16c;
+  background: #fff8e9;
+  color: #9a5200;
+}
+
+.response-delayed-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.response-delayed-content .anticon {
+  flex: 0 0 auto;
+  margin-top: 5px;
+  color: #b36a12;
+}
+
+@keyframes thinking-tip-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0);
+  }
+
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes thinking-tip-label-enter {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinking-antx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-antx-loading,
+  .thinking-tip-dots i,
+  .thinking-tip-label {
+    animation: none;
+  }
+}
+
 .ai-message-body {
   width: 0;
   max-width: none !important;
@@ -799,8 +984,9 @@ button {
   place-items: center;
   border: 1px solid #d9dee5;
   border-radius: 50%;
+  appearance: none;
   background: #fff;
-  box-shadow: 0 5px 16px rgba(39, 47, 58, 0.16);
+  box-shadow: none;
   color: #5f6875;
   font-size: 17px;
   opacity: 0;
@@ -808,8 +994,9 @@ button {
   transform: translate(-50%, 8px) scale(0.88);
   transition:
     opacity 160ms ease,
-    transform 180ms ease,
-    box-shadow 160ms ease;
+    transform 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .scroll-to-bottom-button.visible {
@@ -819,12 +1006,14 @@ button {
 }
 
 .scroll-to-bottom-button.visible:hover {
-  box-shadow: 0 7px 20px rgba(39, 47, 58, 0.22);
+  background: #fff;
+  box-shadow: none;
   color: #a67d47;
   cursor: pointer;
 }
 
 .scroll-to-bottom-button.visible:active {
+  background: #fff;
   transform: translate(-50%, 1px) scale(0.94);
 }
 
@@ -1207,7 +1396,6 @@ button {
     padding-top: 6px;
   }
 
-  .chat-footer:focus-within .quick-prompts,
   .chat-footer:focus-within .sender-support-copy {
     display: none;
   }
