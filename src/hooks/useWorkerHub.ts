@@ -64,6 +64,29 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isWorkOrderMessage(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+
+  const candidates = [
+    value,
+    value.data,
+    value.payload,
+    value.card,
+    value.workOrder,
+  ].filter(isRecord);
+
+  return candidates.some((candidate) => {
+    const rawType = [candidate.type, candidate.messageType, candidate.cardType]
+      .find((item): item is string => typeof item === 'string');
+    if (!rawType) return false;
+
+    const normalized = rawType.toLowerCase().replace(/[\s_-]/g, '');
+    return normalized.includes('工单')
+      || normalized.includes('workorder')
+      || normalized === 'ticket';
+  });
+}
+
 function buildMessage(message: string, context: Record<string, unknown>) {
   const data = {
     workerRelay: context,
@@ -80,6 +103,13 @@ function buildMessage(message: string, context: Record<string, unknown>) {
 function extractMessageText(value: unknown): string {
   if (typeof value === 'string') return value;
   if (!isRecord(value)) return '';
+  if (isWorkOrderMessage(value)) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
   if (typeof value.text === 'string') return value.text;
   if (typeof value.content === 'string') return value.content;
   if (typeof value.deltaText === 'string') return value.deltaText;
@@ -418,7 +448,9 @@ export function useWorkerHub() {
           }
 
           if (state === 'final') {
-            const finalText = extractMessageText(data.message);
+            const finalText = extractMessageText(
+              isWorkOrderMessage(data) ? data : data.message,
+            );
             console.info('[WorkerHub][sendMessage] 接收最终回复：', { finalText, raw: data });
             handlers.onFinal(finalText);
             unsubscribe();

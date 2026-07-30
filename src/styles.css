@@ -68,6 +68,39 @@ button {
   background: #a67d47;
 }
 
+.current-project-header {
+  z-index: 4;
+  display: flex;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 22px;
+  color: #1264d7;
+  border-bottom: 1px solid #c4e2f6;
+  background: #e4f3fd;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.current-project-status {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: #05b66b;
+}
+
+.current-project-label,
+.current-project-name {
+  white-space: nowrap;
+}
+
+.current-project-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -616,7 +649,7 @@ button {
 
 .message-bubble.user {
   color: #fff;
-  background: #a67d47;
+  background: #1677ff;
   padding: 8px 12px;
 }
 
@@ -632,22 +665,14 @@ button {
   flex: 1;
 }
 
-.bubble-agent-avatar {
-  display: grid;
+.bubble-avatar-image {
+  display: block;
   width: 30px;
   height: 30px;
   flex: 0 0 30px;
-  place-items: center;
-  overflow: hidden;
+  object-fit: cover;
   border-radius: 50%;
-  background: #050505;
-}
-
-.bubble-agent-avatar span {
-  width: 23px;
-  height: 11px;
-  border-bottom: 6px solid #c6954d;
-  border-radius: 0 0 50% 50%;
+  background: #fff;
 }
 
 .message-bubble.assistant .x-markdown {
@@ -753,6 +778,100 @@ button {
   display: none;
 }
 
+.sender-container {
+  position: relative;
+}
+
+.scroll-to-bottom-anchor {
+  position: relative;
+  z-index: 5;
+  height: 0;
+}
+
+.scroll-to-bottom-button {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid #d9dee5;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(39, 47, 58, 0.16);
+  color: #5f6875;
+  font-size: 17px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 8px) scale(0.88);
+  transition:
+    opacity 160ms ease,
+    transform 180ms ease,
+    box-shadow 160ms ease;
+}
+
+.scroll-to-bottom-button.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.scroll-to-bottom-button.visible:hover {
+  box-shadow: 0 7px 20px rgba(39, 47, 58, 0.22);
+  color: #a67d47;
+  cursor: pointer;
+}
+
+.scroll-to-bottom-button.visible:active {
+  transform: translate(-50%, 1px) scale(0.94);
+}
+
+.scroll-to-bottom-button:focus-visible {
+  outline: 2px solid #a67d47;
+  outline-offset: 2px;
+}
+
+.emoji-picker-popover .ant-popover-inner {
+  padding: 10px;
+  border: 1px solid #edf0f3;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(38, 45, 55, 0.14);
+}
+
+.emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(8, 34px);
+  gap: 4px;
+  max-width: calc(100vw - 48px);
+}
+
+.emoji-picker-item {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji-picker-item:hover,
+.emoji-picker-item:focus-visible {
+  background: #f2f4f7;
+  outline: none;
+}
+
+.emoji-picker-item:active {
+  background: #e5e9ef;
+  transform: scale(0.92);
+}
+
 .quick-prompts .ant-prompts-item:not(.ant-prompts-item-has-nest):hover {
   background: #fff !important;
 }
@@ -798,6 +917,18 @@ button {
 }
 
 @media (max-width: 480px) {
+  .emoji-picker {
+    grid-template-columns: repeat(8, minmax(28px, 1fr));
+    gap: 2px;
+    width: min(304px, calc(100vw - 48px));
+  }
+
+  .emoji-picker-item {
+    width: 100%;
+    height: 32px;
+    font-size: 20px;
+  }
+
   .quick-prompts .ant-prompts-title {
     margin-bottom: 6px !important;
     font-size: 14px !important;
@@ -938,6 +1069,18 @@ button {
     padding-inline: 14px;
   }
 
+  .current-project-header {
+    min-height: 42px;
+    padding-inline: 18px;
+    font-size: 15px;
+  }
+
+  .current-project-status {
+    width: 8px;
+    height: 8px;
+    margin-right: 8px;
+  }
+
   .brand-lockup {
     font-size: 20px;
   }
@@ -986,7 +1129,7 @@ button {
     padding: 14px;
   }
 
-  .bubble-agent-avatar {
+  .bubble-avatar-image {
     width: 30px;
     height: 30px;
     flex-basis: 30px;

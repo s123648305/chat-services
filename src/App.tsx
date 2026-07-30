@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ChatComposer from './components/ChatComposer';
-import ChatConversation from './components/ChatConversation';
+import ChatConversation, {
+  type ChatConversationRef,
+} from './components/ChatConversation';
 import ChatHeader from './components/ChatHeader';
 import type { ChatSettingsValue } from './components/ChatSettings';
+import CurrentProjectHeader from './components/CurrentProjectHeader';
 import type { ChatMessage } from './components/chatTypes';
 import {
   useWorkerHub,
@@ -25,6 +28,8 @@ const initialSettings: ChatSettingsValue = {
   agentId: 'default',
 };
 
+const currentProjectName = '星河智汇园';
+
 function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
   if (agents.some((agent) => agent.agentId === currentAgentId)) return currentAgentId;
   return agents.find((agent) => agent.isDefault)?.agentId
@@ -35,6 +40,7 @@ function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
 export default function App() {
   // useVisualViewport();
 
+  const conversationRef = useRef<ChatConversationRef>(null);
   const {
     cancelMessage: cancelWorkerHubMessage,
     initialize: initializeWorkerHub,
@@ -49,6 +55,7 @@ export default function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -261,27 +268,34 @@ export default function App() {
   return (
     <main className="chat-page">
       <section className="chat-shell" aria-label="物业助手在线客服">
-        <ChatHeader
+        {/* <ChatHeader
           settings={settings}
           workerOptions={workerOptions}
           agentOptions={agentOptions}
           settingsDisabled={loading || historyLoading}
           onSettingsChange={applySettings}
-        />
+        /> */}
+        <CurrentProjectHeader projectName={currentProjectName} />
         <ChatConversation
+          ref={conversationRef}
           messages={messages}
           historyLoading={historyLoading}
           loading={loading}
           onRetry={(message) => {
             void retryMessage(message);
           }}
+          onBottomStateChange={setShowScrollToBottom}
         />
         <ChatComposer
           loading={loading}
           historyLoading={historyLoading}
+          showScrollToBottom={showScrollToBottom}
           onSubmit={submitQuestion}
           onCancel={() => {
             void cancelWorkerHubMessage();
+          }}
+          onScrollToBottom={() => {
+            conversationRef.current?.scrollToBottom();
           }}
         />
       </section>

@@ -1,29 +1,78 @@
 import {
+  ArrowDownOutlined,
   PlusOutlined,
   SendOutlined,
-  SmileOutlined,
 } from '@ant-design/icons';
 import { Sender, type PromptsItemType } from '@ant-design/x';
 import { useRef, useState } from 'react';
 import type { ChatAttachment } from '../hooks/useWorkerHub';
+import EmojiPicker from './EmojiPicker';
 import PromptList from './promptsList';
 
 type ChatComposerProps = {
   loading: boolean;
   historyLoading: boolean;
+  showScrollToBottom: boolean;
   onSubmit: (question: string, attachment: ChatAttachment | null) => void | Promise<void>;
   onCancel: () => void;
+  onScrollToBottom: () => void;
 };
 
 export default function ChatComposer({
   loading,
   historyLoading,
+  showScrollToBottom,
   onSubmit,
   onCancel,
+  onScrollToBottom,
 }: ChatComposerProps) {
   const [inputValue, setInputValue] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const senderContainerRef = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef({ start: 0, end: 0 });
+
+  const getSenderInput = () => (
+    senderContainerRef.current?.querySelector<HTMLTextAreaElement>(
+      '.ant-sender-input',
+    ) ?? null
+  );
+
+  const rememberSelection = () => {
+    const input = getSenderInput();
+    if (!input) return;
+    selectionRef.current = {
+      start: input.selectionStart ?? inputValue.length,
+      end: input.selectionEnd ?? inputValue.length,
+    };
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const { start, end } = selectionRef.current;
+    const safeStart = Math.min(start, inputValue.length);
+    const safeEnd = Math.min(Math.max(end, safeStart), inputValue.length);
+    const nextValue = `${inputValue.slice(0, safeStart)}${emoji}${inputValue.slice(safeEnd)}`;
+    const nextCursor = safeStart + emoji.length;
+
+    setInputValue(nextValue);
+    selectionRef.current = { start: nextCursor, end: nextCursor };
+
+    window.requestAnimationFrame(() => {
+      const nextInput = getSenderInput();
+      nextInput?.focus();
+      nextInput?.setSelectionRange(nextCursor, nextCursor);
+    });
+  };
+
+  const changeInputValue = (nextValue: string) => {
+    setInputValue(nextValue);
+    const input = getSenderInput();
+    const nextCursor = input?.selectionStart ?? nextValue.length;
+    selectionRef.current = {
+      start: nextCursor,
+      end: input?.selectionEnd ?? nextCursor,
+    };
+  };
 
   const submit = (question: string) => {
     const content = question.trim();
@@ -77,21 +126,41 @@ export default function ChatComposer({
           reader.readAsDataURL(file);
         }}
       />
-      <Sender
-        className="chat-sender"
-        value={inputValue}
-        loading={loading}
-        disabled={historyLoading}
-        placeholder="请输入您想要咨询的问题"
-        autoSize={{ minRows: 1, maxRows: 5 }}
-        onChange={setInputValue}
-        onSubmit={submit}
-        onCancel={onCancel}
-        suffix={(_, { components: { SendButton, LoadingButton } }) => (
-          <div className="sender-actions">
-            <button type="button" disabled={historyLoading || loading} aria-label="选择表情">
-              <SmileOutlined />
-            </button>
+      <div className="scroll-to-bottom-anchor">
+        <button
+          type="button"
+          className={`scroll-to-bottom-button${showScrollToBottom ? ' visible' : ''}`}
+          aria-label="回到最新消息"
+          aria-hidden={!showScrollToBottom}
+          tabIndex={showScrollToBottom ? 0 : -1}
+          onClick={onScrollToBottom}
+        >
+          <ArrowDownOutlined />
+        </button>
+      </div>
+      <div
+        ref={senderContainerRef}
+        className="sender-container"
+        onSelectCapture={rememberSelection}
+        onKeyUpCapture={rememberSelection}
+      >
+        <Sender
+          className="chat-sender"
+          value={inputValue}
+          loading={loading}
+          disabled={historyLoading}
+          placeholder="请输入您想要咨询的问题"
+          autoSize={{ minRows: 1, maxRows: 5 }}
+          onChange={changeInputValue}
+          onSubmit={submit}
+          onCancel={onCancel}
+          suffix={(_, { components: { SendButton, LoadingButton } }) => (
+            <div className="sender-actions">
+              <EmojiPicker
+                disabled={historyLoading || loading}
+                onBeforeOpen={rememberSelection}
+                onSelect={insertEmoji}
+              />
             <button
               type="button"
               disabled={historyLoading || loading}
@@ -99,27 +168,28 @@ export default function ChatComposer({
               onClick={() => fileInputRef.current?.click()}
             >
               <PlusOutlined />
-            </button>
-            <span className="sender-divider" aria-hidden="true" />
-            {loading ? (
-              <LoadingButton
-                className="sender-submit sender-loading"
-                type="text"
-                aria-label="停止生成"
-              />
-            ) : (
-              <SendButton
-                className="sender-submit"
-                type="text"
-                icon={<SendOutlined />}
-                disabled={historyLoading || (!inputValue.trim() && !attachment)}
-                aria-label="发送"
-              />
-            )}
-          </div>
-        )}
-        footer={false}
-      />
+              </button>
+              <span className="sender-divider" aria-hidden="true" />
+              {loading ? (
+                <LoadingButton
+                  className="sender-submit sender-loading"
+                  type="text"
+                  aria-label="停止生成"
+                />
+              ) : (
+                <SendButton
+                  className="sender-submit"
+                  type="text"
+                  icon={<SendOutlined />}
+                  disabled={historyLoading || (!inputValue.trim() && !attachment)}
+                  aria-label="发送"
+                />
+              )}
+            </div>
+          )}
+          footer={false}
+        />
+      </div>
       <div className="sender-support-copy">DeepDataWorker提供技术支持</div>
     </footer>
   );
