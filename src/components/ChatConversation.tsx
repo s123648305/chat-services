@@ -1,9 +1,13 @@
-import { ReloadOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Bubble, type BubbleListProps } from '@ant-design/x';
 import { XMarkdown } from '@ant-design/x-markdown';
 import '@ant-design/x-markdown/dist/x-markdown.css';
 import '@ant-design/x-markdown/themes/light.css';
 import dayjs from 'dayjs';
+import type {
+  CustomerChatActivity,
+  CustomerChatDebugEvent,
+} from '@szdeepdata/customer-relay-sdk';
 import {
   forwardRef,
   useImperativeHandle,
@@ -11,7 +15,14 @@ import {
   useRef,
 } from 'react';
 import type { ChatMessage } from './chatTypes';
-import { MessageCardRenderer, parseMessageCard } from './messageCards';
+import { chatFeatureConfig } from '../config/chatFeatures';
+import ThinkingStatus from './ThinkingStatus';
+import {
+  MessageCardRenderer,
+  parseMessageCard,
+  type MessageCardAction,
+  type MessageCardData,
+} from './messageCards';
 
 export type ChatConversationRef = {
   scrollToBottom: () => void;
@@ -31,6 +42,7 @@ type ChatConversationProps = {
   historyLoading: boolean;
   loading: boolean;
   onRetry: (message: ChatMessage) => void;
+  onCardAction: (action: MessageCardAction, data: MessageCardData) => void;
   onBottomStateChange: (awayFromBottom: boolean) => void;
 };
 
@@ -72,8 +84,29 @@ const bubbleRoles: BubbleListProps['role'] = {
     avatar: userAvatar,
     classNames: { content: 'message-bubble user' },
   },
+  delayed: {
+    placement: 'start',
+    variant: 'borderless',
+    avatar: aiAvatar,
+    styles: {
+      root: { paddingInlineEnd: 0 },
+    },
+    classNames: {
+      body: 'ai-message-body',
+      content: 'message-bubble response-delayed',
+    },
+  },
   ai: (item) => {
     const isCard = Boolean(parseMessageCard(item.content));
+    const cardContext = item.extraInfo as {
+      activity?: CustomerChatActivity;
+      debugEvents?: CustomerChatDebugEvent[];
+      actionsDisabled?: boolean;
+      onCardAction?: (
+        action: MessageCardAction,
+        data: MessageCardData,
+      ) => void;
+    } | undefined;
 
     return {
     placement: 'start',
@@ -83,6 +116,14 @@ const bubbleRoles: BubbleListProps['role'] = {
       root: { paddingInlineEnd: 0 },
     },
     avatar: aiAvatar,
+    ...(item.status === 'updating' ? {
+      loadingRender: () => (
+        <ThinkingStatus
+          activity={cardContext?.activity}
+          debugEvents={cardContext?.debugEvents}
+        />
+      ),
+    } : {}),
     classNames: {
       body: 'ai-message-body',
       content: isCard
@@ -90,25 +131,44 @@ const bubbleRoles: BubbleListProps['role'] = {
         : 'message-bubble assistant',
     },
     contentRender: (content, info) => (
-      <MessageCardRenderer
-        content={content}
-        fallback={(
-          <XMarkdown
-            content={String(content ?? '')}
-            rootClassName="x-markdown-light"
-            openLinksInNewTab
-            streaming={{
-              hasNextChunk: info.status === 'updating',
-              enableAnimation: true,
-              animationConfig: {
-                fadeDuration: 180,
-                easing: 'ease-out',
-              },
-              tail: info.status === 'updating' ? { content: '●' } : false,
-            }}
+      <div className="assistant-content-stack">
+        {(
+          Boolean(cardContext?.debugEvents?.length)
+          || (
+            info.status === 'updating'
+            && Boolean(content)
+            && cardContext?.activity
+          )
+        ) ? (
+          <ThinkingStatus
+            activity={cardContext?.activity}
+            debugEvents={cardContext?.debugEvents}
+            compact
+            complete={info.status !== 'updating'}
           />
-        )}
-      />
+        ) : null}
+        <MessageCardRenderer
+          content={content}
+          disabled={cardContext?.actionsDisabled}
+          onAction={cardContext?.onCardAction}
+          fallback={(
+            <XMarkdown
+              content={String(content ?? '')}
+              rootClassName="x-markdown-light"
+              openLinksInNewTab
+              streaming={{
+                hasNextChunk: info.status === 'updating',
+                enableAnimation: true,
+                animationConfig: {
+                  fadeDuration: 180,
+                  easing: 'ease-out',
+                },
+                tail: info.status === 'updating' ? { content: '●' } : false,
+              }}
+            />
+          )}
+        />
+      </div>
     ),
     };
   },
@@ -120,6 +180,7 @@ function ChatConversation({
   historyLoading,
   loading,
   onRetry,
+  onCardAction,
   onBottomStateChange,
 }, ref) {
   const bubbleListRef = useRef<BubbleListRef>(null);
@@ -148,15 +209,23 @@ function ChatConversation({
         ),
         typing: false,
       },
-      ...messages.map((message) => {
+      ...messages.flatMap((message) => {
         const streaming = message.status === 'streaming';
         const failed = message.status === 'error';
         const aborted = message.status === 'abort';
 
-        return {
+        const messageItem = {
           key: message.id,
           role: message.role === 'assistant' ? 'ai' : 'user',
           content: message.content,
+          ...(message.role === 'assistant' ? {
+            extraInfo: {
+              activity: message.activity,
+              debugEvents: message.debugEvents,
+              actionsDisabled: loading,
+              onCardAction,
+            },
+          } : {}),
           loading: streaming && message.content.length === 0,
           streaming,
           status: failed
@@ -181,6 +250,30 @@ function ChatConversation({
           } : {}),
           ...(message.historical ? { typing: false } : {}),
         };
+
+        if (
+          !chatFeatureConfig.responseDelay.enabled
+          || !message.responseDelayed
+        ) {
+          return [messageItem];
+        }
+
+        return [
+          messageItem,
+          {
+            key: `${message.id}-response-delayed`,
+            role: 'delayed',
+            content: (
+              <div className="response-delayed-content">
+                <ClockCircleOutlined aria-hidden="true" />
+                <span>{chatFeatureConfig.responseDelay.message}</span>
+              </div>
+            ),
+            typing: false,
+            streaming: false,
+            status: 'success' as const,
+          },
+        ];
       }),
     ];
 
@@ -197,7 +290,14 @@ function ChatConversation({
     }
 
     return items;
-  }, [historyLoading, loading, messages, onRetry, timeLabel]);
+  }, [
+    historyLoading,
+    loading,
+    messages,
+    onCardAction,
+    onRetry,
+    timeLabel,
+  ]);
 
   return (
     <div className="chat-scroll">

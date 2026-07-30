@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CustomerChatActivity,
+  CustomerChatDebugEvent,
+} from '@szdeepdata/customer-relay-sdk';
 import ChatComposer from './components/ChatComposer';
 import ChatConversation, {
   type ChatConversationRef,
@@ -7,6 +11,12 @@ import ChatHeader from './components/ChatHeader';
 import type { ChatSettingsValue } from './components/ChatSettings';
 import CurrentProjectHeader from './components/CurrentProjectHeader';
 import type { ChatMessage } from './components/chatTypes';
+import { chatFeatureConfig } from './config/chatFeatures';
+import {
+  handleMessageCardAction,
+  type MessageCardAction,
+  type MessageCardData,
+} from './components/messageCards';
 import {
   useWorkerHub,
   type ChatAttachment,
@@ -14,12 +24,13 @@ import {
   type WorkerHubWorker,
 } from './hooks/useWorkerHub';
 import { useVisualViewport } from './hooks/useVisualViewport';
-
+const currentProjectName = '星河智汇园';
 const baseUserInfo = {
   source: 'h5',
   token: 'token',
   phone: '15626881010',
   userName: '李四',
+  projectName:currentProjectName
 };
 
 const initialSettings: ChatSettingsValue = {
@@ -28,7 +39,7 @@ const initialSettings: ChatSettingsValue = {
   agentId: 'default',
 };
 
-const currentProjectName = '星河智汇园';
+
 
 function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
   if (agents.some((agent) => agent.agentId === currentAgentId)) return currentAgentId;
@@ -129,6 +140,42 @@ export default function App() {
     )));
   };
 
+  const setAssistantResponseDelayed = (
+    messageId: string,
+    responseDelayed: boolean,
+  ) => {
+    setMessages((items) => items.map((message) => (
+      message.id === messageId
+        ? { ...message, responseDelayed }
+        : message
+    )));
+  };
+
+  const setAssistantActivity = (
+    messageId: string,
+    activity?: CustomerChatActivity,
+  ) => {
+    setMessages((items) => items.map((message) => (
+      message.id === messageId
+        ? { ...message, activity }
+        : message
+    )));
+  };
+
+  const appendAssistantDebugEvent = (
+    messageId: string,
+    debugEvent: CustomerChatDebugEvent,
+  ) => {
+    setMessages((items) => items.map((message) => (
+      message.id === messageId
+        ? {
+            ...message,
+            debugEvents: [...(message.debugEvents ?? []), debugEvent],
+          }
+        : message
+    )));
+  };
+
   const runAssistantRequest = async (
     assistantMessageId: string,
     requestMessage: string,
@@ -136,13 +183,39 @@ export default function App() {
     idempotencyKey: string,
   ) => {
     setLoading(true);
+    let responseStarted = false;
+    const responseDelayTimer = chatFeatureConfig.responseDelay.enabled
+      ? window.setTimeout(() => {
+          if (!responseStarted) {
+            setAssistantResponseDelayed(assistantMessageId, true);
+          }
+        }, chatFeatureConfig.responseDelay.timeoutMs)
+      : null;
+
+    const markResponseStarted = () => {
+      if (responseStarted) return;
+      responseStarted = true;
+      if (responseDelayTimer !== null) {
+        window.clearTimeout(responseDelayTimer);
+      }
+      setAssistantResponseDelayed(assistantMessageId, false);
+    };
 
     try {
       await sendWorkerHubMessage(requestMessage, {
+        onActivity: (activity) => {
+          setAssistantActivity(assistantMessageId, activity);
+        },
+        onDebug: (debugEvent) => {
+          appendAssistantDebugEvent(assistantMessageId, debugEvent);
+        },
         onDelta: (text) => {
+          markResponseStarted();
           updateAssistantMessage(assistantMessageId, (currentContent) => currentContent + text);
         },
         onFinal: (text) => {
+          markResponseStarted();
+          setAssistantActivity(assistantMessageId);
           updateAssistantMessage(
             assistantMessageId,
             (currentContent) => text || currentContent || '已收到回复。',
@@ -150,6 +223,8 @@ export default function App() {
           );
         },
         onAbort: () => {
+          markResponseStarted();
+          setAssistantActivity(assistantMessageId);
           updateAssistantMessage(
             assistantMessageId,
             (currentContent) => currentContent || '已停止生成。',
@@ -165,6 +240,8 @@ export default function App() {
         ...(selectedAttachment ? { attachments: [selectedAttachment] } : {}),
       });
     } catch (error) {
+      markResponseStarted();
+      setAssistantActivity(assistantMessageId);
       console.error('[App] 消息发送失败：', error);
       updateAssistantMessage(
         assistantMessageId,
@@ -172,6 +249,9 @@ export default function App() {
         'error',
       );
     } finally {
+      if (responseDelayTimer !== null) {
+        window.clearTimeout(responseDelayTimer);
+      }
       setLoading(false);
     }
   };
@@ -181,7 +261,14 @@ export default function App() {
 
     setMessages((items) => items.map((item) => (
       item.id === message.id
-        ? { ...item, content: '', status: 'streaming' }
+        ? {
+            ...item,
+            content: '',
+            activity: undefined,
+            debugEvents: undefined,
+            responseDelayed: false,
+            status: 'streaming',
+          }
         : item
     )));
 
@@ -284,6 +371,14 @@ export default function App() {
           onRetry={(message) => {
             void retryMessage(message);
           }}
+          onCardAction={(
+            action: MessageCardAction,
+            data: MessageCardData,
+          ) => {
+            void handleMessageCardAction(action, data, {
+              sendMessage: (content) => submitQuestion(content, null),
+            });
+          }}
           onBottomStateChange={setShowScrollToBottom}
         />
         <ChatComposer
@@ -295,6 +390,7 @@ export default function App() {
             void cancelWorkerHubMessage();
           }}
           onScrollToBottom={() => {
+            setShowScrollToBottom(false);
             conversationRef.current?.scrollToBottom();
           }}
         />

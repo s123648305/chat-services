@@ -6,6 +6,10 @@ function requireEnv(name: string, value: string | undefined) {
   return normalizedValue;
 }
 
+function readVisibility(value: string | undefined): 'public' | 'debug' {
+  return value?.trim().toLowerCase() === 'debug' ? 'debug' : 'public';
+}
+
 export const workerHubConfig = {
   apiKey: requireEnv(
     'VITE_WORKER_HUB_API_KEY',
@@ -19,6 +23,7 @@ export const workerHubConfig = {
     'VITE_WORKER_HUB_HOST',
     import.meta.env.VITE_WORKER_HUB_HOST,
   ),
+  visibility: readVisibility(import.meta.env.VITE_WORKER_CHAT_VISIBILITY),
 };
 
 export function createWorkerHubApiUrl() {
