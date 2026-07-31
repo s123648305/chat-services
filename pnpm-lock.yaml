@@ -17,9 +17,9 @@ importers:
       '@ant-design/x-markdown':
         specifier: ^2.8.0
         version: 2.8.0(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@szdeepdata/customer-relay-sdk':
-        specifier: link:D:/project/sdk
-        version: link:../../project/sdk
+      '@dcloudio/uni-webview-js':
+        specifier: 0.0.3
+        version: 0.0.3
       antd:
         specifier: ^5.27.0
         version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -32,6 +32,9 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      szdeepdata-worker-sdk:
+        specifier: link:D:/project/sdk
+        version: link:../../project/sdk
     devDependencies:
       '@types/react':
         specifier: ^18.3.23
@@ -219,6 +222,9 @@ packages:
 
   '@chevrotain/types@11.1.2':
     resolution: {integrity: sha512-U+HFai5+zmJCkK86QsaJtoITlboZHBqrVketcO2ROv865xfCMSFpELQoz1GkX5GzME8pTa+3kbKrZHQtI0gdbw==}
+
+  '@dcloudio/uni-webview-js@0.0.3':
+    resolution: {integrity: sha512-3XDnLXg22QKC/aTLtGim6zbOK+euiDYoRf98BjGDE0lqMm1U4SLFHAvOlAHa0qck91phaceKwo73ScQQgSojQg==}
 
   '@emotion/hash@0.8.0':
     resolution: {integrity: sha512-kBJtf7PH6aWwZ6fka3zQ0p6SBYzx4fl1LoZXE2RrnYST9Xljm7WfKJrU4g/Xr3Beg72MLrp1AWNUmuYJTL7Cow==}
@@ -1900,6 +1906,8 @@ snapshots:
   '@braintree/sanitize-url@7.1.2': {}
 
   '@chevrotain/types@11.1.2': {}
+
+  '@dcloudio/uni-webview-js@0.0.3': {}
 
   '@emotion/hash@0.8.0': {}
 

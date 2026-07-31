@@ -15,7 +15,7 @@
     "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "@szdeepdata/customer-relay-sdk": ["../project/sdk/dist/index.d.ts"]
+      "szdeepdata-worker-sdk": ["../project/sdk/dist/index.d.ts"]
     },
     "resolveJsonModule": true,
     "isolatedModules": true,

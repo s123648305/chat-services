@@ -6,7 +6,7 @@ import {
   type CustomerChatDebugEvent,
   type CustomerWorker,
   type WorkerAgent,
-} from '@szdeepdata/customer-relay-sdk';
+} from 'szdeepdata-worker-sdk';
 import { useCallback, useEffect, useRef } from 'react';
 import {
   createWorkerHubApiUrl,

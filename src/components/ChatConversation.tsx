@@ -7,7 +7,7 @@ import dayjs from 'dayjs';
 import type {
   CustomerChatActivity,
   CustomerChatDebugEvent,
-} from '@szdeepdata/customer-relay-sdk';
+} from 'szdeepdata-worker-sdk';
 import {
   forwardRef,
   useImperativeHandle,

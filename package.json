@@ -12,11 +12,12 @@
     "@ant-design/icons": "^6.0.0",
     "@ant-design/x": "^2.5.0",
     "@ant-design/x-markdown": "^2.8.0",
-    "@szdeepdata/customer-relay-sdk": "link:D:/project/sdk",
+    "@dcloudio/uni-webview-js": "0.0.3",
     "antd": "^5.27.0",
     "dayjs": "^1.11.21",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "szdeepdata-worker-sdk": "link:D:/project/sdk"
   },
   "devDependencies": {
     "@types/react": "^18.3.23",
