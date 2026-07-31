@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   CustomerChatActivity,
   CustomerChatDebugEvent,
-} from '@szdeepdata/customer-relay-sdk';
+} from 'szdeepdata-worker-sdk';
 import ChatComposer from './components/ChatComposer';
 import ChatConversation, {
   type ChatConversationRef,
@@ -30,7 +30,8 @@ const baseUserInfo = {
   token: 'token',
   phone: '15626881010',
   userName: '李四',
-  projectName:currentProjectName
+  tenantId:'TENANT-ID',
+  projectId:currentProjectName
 };
 
 const initialSettings: ChatSettingsValue = {

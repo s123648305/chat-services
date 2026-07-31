@@ -1,7 +1,7 @@
 import type {
   CustomerChatActivity,
   CustomerChatDebugEvent,
-} from '@szdeepdata/customer-relay-sdk';
+} from 'szdeepdata-worker-sdk';
 import { Think } from '@ant-design/x';
 import { useEffect, useMemo, useState } from 'react';
 import { chatFeatureConfig } from '../config/chatFeatures';
