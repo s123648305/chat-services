@@ -366,6 +366,7 @@ export default function App() {
         <CurrentProjectHeader projectName={currentProjectName} />
         <ChatConversation
           ref={conversationRef}
+          projectName={currentProjectName}
           messages={messages}
           historyLoading={historyLoading}
           loading={loading}

@@ -852,8 +852,8 @@ button {
 
 .bubble-avatar-image {
   display: block;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   flex: 0 0 30px;
   object-fit: cover;
   border-radius: 50%;
@@ -1318,11 +1318,6 @@ button {
     padding: 14px;
   }
 
-  .bubble-avatar-image {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
-  }
 
   .category-list {
     grid-auto-columns: 105px;

@@ -42,6 +42,7 @@ type ChatConversationProps = {
   messages: ChatMessage[];
   historyLoading: boolean;
   loading: boolean;
+  projectName:string;
   onRetry: (message: ChatMessage) => void;
   onCardAction: (action: MessageCardAction, data: MessageCardData) => void;
   onBottomStateChange: (awayFromBottom: boolean) => void;
@@ -180,6 +181,7 @@ const bubbleRoles: BubbleListProps['role'] = {
 
 const ChatConversation = forwardRef<ChatConversationRef, ChatConversationProps>(
 function ChatConversation({
+  projectName,
   messages,
   historyLoading,
   loading,
@@ -206,7 +208,7 @@ function ChatConversation({
         role: 'welcome',
         content: (
           <>
-            <strong>▷ 您好！我是星河智汇园的 AI 客服！</strong>
+            <strong>▷ 您好！我是{projectName}的 AI 客服！</strong>
             <span>可以帮您咨询园区信息、报事报修、查询工单进度。请问有什么可以帮您？</span>
             <span className="sparkles">✨ ✨ ✨</span>
           </>
