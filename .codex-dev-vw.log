@@ -1,0 +1,8 @@
+Port 8888 is in use, trying another one...
+
+  [32m[1mVITE[22m v7.3.6[39m  [2mready in [0m[1m336[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m8889[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.112.137:[1m8889[22m/[39m
+[2m21:44:45[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mresponsive-vw-test.html[22m
+[2m22:24:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2mresponsive-vw-test.html[22m

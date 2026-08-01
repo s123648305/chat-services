@@ -21,6 +21,7 @@ body,
 
 body {
   margin: 0;
+  /* px-to-vw-ignore */
   min-width: 320px;
   min-height: 0;
   overscroll-behavior: none;
@@ -47,6 +48,7 @@ button {
 .chat-shell {
   position: relative;
   display: flex;
+  /* px-to-vw-ignore */
   width: min(100vw, 890px);
   height: 100%;
   min-height: 0;
