@@ -1,4 +1,5 @@
 allowBuilds:
+  core-js: false
   esbuild: true
 minimumReleaseAgeExclude:
   - szdeepdata-worker-sdk@0.1.0

@@ -16,6 +16,7 @@
     "@ant-design/x-markdown": "^2.8.0",
     "@dcloudio/uni-webview-js": "0.0.3",
     "antd": "^5.27.0",
+    "core-js": "^3.49.0",
     "dayjs": "^1.11.21",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

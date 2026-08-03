@@ -12,6 +12,7 @@ import {
   createWorkerHubApiUrl,
   workerHubConfig,
 } from '../config/workerHub';
+import { createUuid } from '../utils/createUuid';
 
 type StreamHandlers = {
   onActivity?: (activity: CustomerChatActivity) => void;
@@ -510,7 +511,7 @@ export function useWorkerHub() {
 
 
       const {
-        idempotencyKey = crypto.randomUUID(),
+        idempotencyKey = createUuid(),
         ...messageContext
       } = options;
       const requestPayload = {

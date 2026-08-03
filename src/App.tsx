@@ -24,6 +24,7 @@ import {
   type WorkerHubWorker,
 } from './hooks/useWorkerHub';
 import { useVisualViewport } from './hooks/useVisualViewport';
+import { createUuid } from './utils/createUuid';
 const currentProjectName = '星河智汇园';
 const baseUserInfo = {
   source: 'h5',
@@ -50,7 +51,7 @@ function resolveAgentId(agents: WorkerHubAgent[], currentAgentId: string) {
 }
 
 export default function App() {
-  // useVisualViewport();
+  useVisualViewport();
 
   const conversationRef = useRef<ChatConversationRef>(null);
   const {
@@ -290,7 +291,7 @@ export default function App() {
 
     const displayContent = content || `附件：${selectedAttachment?.name ?? ''}`;
     const requestMessage = content || '请查看附件并回复。';
-    const requestId = crypto.randomUUID();
+    const requestId = createUuid();
     const assistantMessageId = `assistant-${requestId}`;
 
     setMessages((items) => [

@@ -1,5 +1,5 @@
 :root {
-  --app-viewport-height: 100dvh;
+  --app-viewport-height: 100vh;
   font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
   color: #323232;
   background: #e9edf1;
@@ -639,7 +639,22 @@ button {
 .message-list .ant-bubble-list-scroll-box {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-color: rgba(95, 104, 117, 0.35) transparent;
+  scrollbar-width: thin;
   touch-action: pan-y;
+}
+
+.message-list .ant-bubble-list-scroll-box::-webkit-scrollbar {
+  width: 3px;
+}
+
+.message-list .ant-bubble-list-scroll-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-list .ant-bubble-list-scroll-box::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(95, 104, 117, 0.35);
 }
 
 .message-bubble {
